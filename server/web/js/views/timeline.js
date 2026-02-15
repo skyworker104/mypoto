@@ -1,5 +1,5 @@
 /**
- * Timeline view - photo grid with upload, multi-select, and batch actions.
+ * Timeline view - Google Photos-style justified layout with upload and multi-select.
  */
 import { apiJson, apiPost, apiUpload } from '../api.js';
 import { getState, setState, updateState } from '../store.js';
@@ -16,6 +16,15 @@ let _loading = false;
 let _selectMode = false;
 const _selected = new Set();
 let _longPressTimer = null;
+
+// Target row height for justified layout (responsive)
+function _getTargetRowHeight() {
+  const w = window.innerWidth;
+  if (w >= 1920) return 280;
+  if (w >= 1200) return 240;
+  if (w >= 768) return 200;
+  return 160;
+}
 
 export function init(container) {
   _el = container;
@@ -268,40 +277,93 @@ function _renderGroups(newPhotos) {
   observeImages(_gridContainer);
 }
 
-function _appendPhotosToGrid(grid, photos) {
-  for (const photo of photos) {
-    const thumb = el('div', {
-      className: 'photo-thumb',
-      'data-id': photo.id,
-    }, [
-      el('img', {
-        'data-src': `/api/v1/photos/${photo.id}/thumb`,
-        alt: '',
-        className: 'lazy-img',
-      }),
-    ]);
+// --- Justified Layout Algorithm ---
+function _justifiedLayout(photos, containerWidth) {
+  const gap = 4;
+  const targetHeight = _getTargetRowHeight();
+  const rows = [];
+  let currentRow = [];
+  let currentAspectSum = 0;
 
-    if (photo.is_favorite) {
-      thumb.appendChild(el('span', { className: 'thumb-fav material-symbols-outlined', textContent: 'favorite' }));
+  for (const photo of photos) {
+    const w = photo.width || 400;
+    const h = photo.height || 300;
+    const aspect = w / h;
+    currentRow.push({ photo, aspect });
+    currentAspectSum += aspect;
+
+    // Check if row is full (would the row height be <= target?)
+    const usableWidth = containerWidth - gap * (currentRow.length - 1);
+    const rowHeight = usableWidth / currentAspectSum;
+
+    if (rowHeight <= targetHeight) {
+      rows.push({ items: currentRow, height: rowHeight });
+      currentRow = [];
+      currentAspectSum = 0;
+    }
+  }
+
+  // Last incomplete row: use target height but don't stretch beyond it
+  if (currentRow.length > 0) {
+    const usableWidth = containerWidth - gap * (currentRow.length - 1);
+    const rowHeight = Math.min(targetHeight, usableWidth / currentAspectSum);
+    rows.push({ items: currentRow, height: rowHeight });
+  }
+
+  return rows;
+}
+
+function _appendPhotosToGrid(grid, photos) {
+  const containerWidth = grid.parentElement?.clientWidth || _gridContainer.clientWidth || window.innerWidth;
+  const gridPadding = 8; // 2 * grid-gap (4px each side)
+  const availableWidth = containerWidth - gridPadding;
+  const gap = 4;
+
+  const rows = _justifiedLayout(photos, availableWidth);
+
+  for (const row of rows) {
+    const rowEl = el('div', { className: 'photo-row' });
+
+    for (const { photo, aspect } of row.items) {
+      const thumbWidth = Math.floor(aspect * row.height);
+      const thumbHeight = Math.floor(row.height);
+
+      const thumb = el('div', {
+        className: 'photo-thumb',
+        'data-id': photo.id,
+        style: { width: `${thumbWidth}px`, height: `${thumbHeight}px` },
+      }, [
+        el('img', {
+          'data-src': `/api/v1/photos/${photo.id}/thumb?size=${thumbHeight > 200 ? 'medium' : 'small'}`,
+          alt: '',
+          className: 'lazy-img',
+        }),
+      ]);
+
+      if (photo.is_favorite) {
+        thumb.appendChild(el('span', { className: 'thumb-fav material-symbols-outlined', textContent: 'favorite' }));
+      }
+
+      // Check mark overlay for selection mode
+      thumb.appendChild(el('span', { className: 'thumb-check material-symbols-outlined', textContent: 'check_circle' }));
+
+      // Click: navigate or toggle select
+      thumb.addEventListener('click', () => {
+        if (_selectMode) _toggleSelect(photo.id);
+        else navigate(`/viewer/${photo.id}`);
+      });
+
+      // Long press: enter select mode
+      thumb.addEventListener('pointerdown', () => {
+        _longPressTimer = setTimeout(() => _enterSelectMode(photo.id), 500);
+      });
+      thumb.addEventListener('pointerup', () => clearTimeout(_longPressTimer));
+      thumb.addEventListener('pointerleave', () => clearTimeout(_longPressTimer));
+
+      rowEl.appendChild(thumb);
     }
 
-    // Check mark overlay for selection mode
-    thumb.appendChild(el('span', { className: 'thumb-check material-symbols-outlined', textContent: 'check_circle' }));
-
-    // Click: navigate or toggle select
-    thumb.addEventListener('click', () => {
-      if (_selectMode) _toggleSelect(photo.id);
-      else navigate(`/viewer/${photo.id}`);
-    });
-
-    // Long press: enter select mode
-    thumb.addEventListener('pointerdown', () => {
-      _longPressTimer = setTimeout(() => _enterSelectMode(photo.id), 500);
-    });
-    thumb.addEventListener('pointerup', () => clearTimeout(_longPressTimer));
-    thumb.addEventListener('pointerleave', () => clearTimeout(_longPressTimer));
-
-    grid.appendChild(thumb);
+    grid.appendChild(rowEl);
   }
 }
 

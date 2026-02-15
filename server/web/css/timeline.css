@@ -1,4 +1,4 @@
-/* Timeline & Photo Grid */
+/* Timeline & Photo Grid — Google Photos-style justified layout */
 .timeline-grid {
   padding-bottom: var(--sp-4);
 }
@@ -7,26 +7,31 @@
   margin-bottom: var(--sp-1);
 }
 
+/* Justified layout: rows of photos that fill container width */
 .photo-grid {
-  display: grid;
-  grid-template-columns: repeat(var(--grid-cols), 1fr);
-  gap: var(--grid-gap);
   padding: 0 var(--grid-gap);
+}
+
+.photo-row {
+  display: flex;
+  gap: var(--grid-gap);
+  margin-bottom: var(--grid-gap);
 }
 
 .photo-thumb {
   position: relative;
-  aspect-ratio: 1;
   overflow: hidden;
   cursor: pointer;
   background: var(--color-surface-variant);
   border-radius: 2px;
+  flex-shrink: 0;
 }
 
 .photo-thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
   transition: opacity var(--transition-normal);
 }
 

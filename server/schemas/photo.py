@@ -35,6 +35,8 @@ class PhotoResponse(BaseModel):
     location_name: Optional[str]
     camera_make: Optional[str]
     camera_model: Optional[str]
+    ai_scene: Optional[str] = None
+    exif_data: Optional[str] = None
     description: Optional[str]
     is_favorite: bool
     is_video: bool
@@ -68,6 +70,8 @@ class PhotoBatchResponse(BaseModel):
 
 class SystemStatusResponse(BaseModel):
     server_name: str
+    server_id: str
+    server_url: str
     version: str
     photo_count: int
     total_size_bytes: int

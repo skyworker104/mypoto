@@ -38,6 +38,7 @@ def pairing_status(request_obj: Request):
 
 @router.get("/status", response_model=SystemStatusResponse)
 def system_status(
+    request_obj: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -52,8 +53,15 @@ def system_status(
         select(func.coalesce(func.sum(Photo.file_size), 0)).where(Photo.status == "active")
     ).one()
 
+    # Build server URL from request host header
+    host_header = request_obj.headers.get("host", f"{settings.host}:{settings.port}")
+    scheme = request_obj.headers.get("x-forwarded-proto", "http")
+    server_url = f"{scheme}://{host_header}"
+
     return SystemStatusResponse(
         server_name=settings.server_name,
+        server_id=settings.server_id,
+        server_url=server_url,
         version="0.1.0",
         photo_count=photo_count,
         total_size_bytes=total_size,
