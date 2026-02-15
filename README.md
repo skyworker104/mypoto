@@ -111,7 +111,7 @@ mypoto/
 
 ## 빠른 시작
 
-### 서버 실행
+### 서버 실행 (PC / Mac / Linux)
 
 ```bash
 # 의존성 설치
@@ -144,6 +144,130 @@ flutter run -d emulator-5554
 # 서버 테스트 (92개)
 PYTHONPATH=. python3 tests/test_phase2.py   # 48 tests
 PYTHONPATH=. python3 tests/test_phase3.py   # 44 tests
+```
+
+---
+
+## Android Termux 서버 배포
+
+안드로이드 셋톱박스 또는 안드로이드 기기에서 Termux를 이용해 PhotoNest 서버를 운영할 수 있습니다.
+
+### 사전 준비
+
+1. **Termux** 설치 — [F-Droid](https://f-droid.org/packages/com.termux/)에서 다운로드 (Play Store 버전은 업데이트 중단됨)
+2. (선택) **Termux:Boot** 설치 — 기기 부팅 시 서버 자동 시작용
+
+### 1단계: 소스 코드 받기
+
+```bash
+pkg install -y git
+git clone https://github.com/skyworker104/mypoto.git ~/mypoto
+cd ~/mypoto
+```
+
+### 2단계: 원클릭 설치
+
+설치 스크립트가 시스템 패키지, Python 가상환경, 의존성, 데이터 디렉토리를 한 번에 설정합니다.
+
+```bash
+bash scripts/setup_termux.sh
+```
+
+스크립트가 수행하는 작업:
+| 단계 | 내용 |
+|------|------|
+| 1 | Termux 패키지 업데이트 (`pkg update`) |
+| 2 | 시스템 의존성 설치 (`python`, `openssl`, `libffi`, `libjpeg-turbo`, `libpng`) |
+| 3 | Python 가상환경 생성 (`~/photonest-venv`) |
+| 4 | Python 패키지 설치 (`pip install -r requirements.txt`) |
+| 5 | 데이터 디렉토리 생성 (`~/photonest/data`, `originals`, `thumbnails`, `ai`) |
+| 6 | Termux:Boot 자동 시작 스크립트 설정 |
+
+### 3단계: AI 모델 다운로드 (선택)
+
+얼굴 인식 기능을 사용하려면 ONNX 모델을 다운로드합니다.
+
+```bash
+bash scripts/download_models.sh
+```
+
+- **UltraFace-slim** (~300KB) — 얼굴 감지
+- **MobileFaceNet** (~4MB) — 얼굴 임베딩 (512차원)
+
+모델은 `~/photonest/ai/models/`에 저장됩니다.
+
+### 서버 시작
+
+```bash
+# 포그라운드 실행 (로그 실시간 확인)
+bash scripts/start_server.sh
+
+# 또는 백그라운드 실행
+source ~/photonest-venv/bin/activate
+cd ~/mypoto
+nohup python3 -m uvicorn server.main:app --host 0.0.0.0 --port 8080 > ~/photonest/data/server.log 2>&1 &
+```
+
+서버가 시작되면:
+- **웹 UI**: `http://<기기IP>:8080`
+- **API 문서**: `http://<기기IP>:8080/docs`
+- 같은 Wi-Fi 네트워크의 모바일 앱에서 자동 발견됩니다
+
+### 서버 종료
+
+```bash
+# 실행 중인 서버 프로세스 확인
+ps aux | grep uvicorn
+
+# 서버 종료
+pkill -f "uvicorn server.main:app"
+```
+
+### 로그 확인
+
+```bash
+# 백그라운드 실행 시 로그 확인
+cat ~/photonest/data/server.log
+
+# 실시간 로그 모니터링
+tail -f ~/photonest/data/server.log
+```
+
+### 서버 상태 확인
+
+```bash
+curl http://localhost:8080/api/v1/system/status
+```
+
+### 부팅 시 자동 시작
+
+`setup_termux.sh`를 실행하면 Termux:Boot 자동 시작이 자동으로 설정됩니다.
+수동으로 설정하려면:
+
+```bash
+mkdir -p ~/.termux/boot
+cat > ~/.termux/boot/photonest-server << 'EOF'
+#!/data/data/com.termux/files/usr/bin/bash
+source $HOME/photonest-venv/bin/activate
+cd $HOME/mypoto
+nohup python -m uvicorn server.main:app --host 0.0.0.0 --port 8080 > $HOME/photonest/data/server.log 2>&1 &
+EOF
+chmod +x ~/.termux/boot/photonest-server
+```
+
+> Termux:Boot 앱이 설치되어 있어야 하며, 최초 1회 Termux:Boot 앱을 실행해야 활성화됩니다.
+
+### 데이터 디렉토리 구조
+
+```
+~/photonest/
+├── data/              # SQLite DB, 서버 로그
+├── originals/         # 원본 사진 저장
+├── thumbnails/
+│   ├── small/         # 작은 썸네일 (200px)
+│   └── medium/        # 중간 썸네일 (800px)
+└── ai/
+    └── models/        # ONNX AI 모델 파일
 ```
 
 ## 앱 화면 구성
