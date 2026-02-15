@@ -167,7 +167,7 @@ cd ~/mypoto
 
 ### 2단계: 원클릭 설치
 
-설치 스크립트가 시스템 패키지, Python 가상환경, 의존성, 데이터 디렉토리를 한 번에 설정합니다.
+설치 스크립트가 **Termux pkg(미리 빌드된 바이너리)를 우선 사용**하여 C/C++ 컴파일 오류 없이 설치합니다.
 
 ```bash
 bash scripts/setup_termux.sh
@@ -177,11 +177,14 @@ bash scripts/setup_termux.sh
 | 단계 | 내용 |
 |------|------|
 | 1 | Termux 패키지 업데이트 (`pkg update`) |
-| 2 | 시스템 의존성 설치 (`python`, `openssl`, `libffi`, `libjpeg-turbo`, `libpng`) |
-| 3 | Python 가상환경 생성 (`~/photonest-venv`) |
-| 4 | Python 패키지 설치 (`pip install -r requirements.txt`) |
-| 5 | 데이터 디렉토리 생성 (`~/photonest/data`, `originals`, `thumbnails`, `ai`) |
-| 6 | Termux:Boot 자동 시작 스크립트 설정 |
+| 2 | 시스템 의존성 설치 (`python`, `build-essential`, `openssl`, `libffi`, `libjpeg-turbo` 등) |
+| 3 | **pkg로 C 확장 Python 패키지 설치** (`python-numpy`, `python-pillow`, `python-bcrypt`, `python-cryptography`, `python-scikit-learn`) |
+| 4 | Python 가상환경 생성 (`--system-site-packages`로 pkg 패키지 연동) |
+| 5 | pip으로 나머지 순수 Python 패키지 설치 (FastAPI, uvicorn, SQLModel 등) |
+| 6 | 데이터 디렉토리 생성 (`~/photonest/data`, `originals`, `thumbnails`, `ai`) |
+| 7 | Termux:Boot 자동 시작 스크립트 설정 |
+
+> `pillow-heif`(HEIC 지원)와 `onnxruntime`(AI 얼굴 인식)은 선택적이며, 설치 실패 시 자동으로 건너뜁니다.
 
 ### 3단계: AI 모델 다운로드 (선택)
 
