@@ -1,0 +1,122 @@
+/* Fullscreen Photo Viewer */
+.viewer-container {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: var(--color-bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.viewer-top-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: 56px;
+  padding: 0 var(--sp-2);
+  background: var(--color-bg);
+  z-index: 210;
+}
+
+.viewer-date {
+  flex: 1;
+  font-size: var(--font-size-md);
+  color: var(--color-on-surface-variant);
+}
+
+.viewer-actions {
+  display: flex;
+  gap: var(--sp-1);
+}
+
+.viewer-image-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #000;
+}
+
+.viewer-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.viewer-nav {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 var(--sp-2);
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 210;
+}
+
+.viewer-nav .btn-icon {
+  pointer-events: auto;
+  background: var(--color-scrim);
+  color: #fff;
+  width: 44px;
+  height: 44px;
+}
+
+.viewer-nav .btn-icon:hover {
+  background: var(--color-overlay);
+}
+
+.viewer-info {
+  padding: var(--sp-2) var(--sp-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-on-surface-variant);
+  text-align: center;
+  background: var(--color-bg);
+}
+
+/* Detail panel (info + description) */
+.viewer-detail {
+  background: var(--color-bg);
+  padding: var(--sp-2) var(--sp-4) var(--sp-4);
+}
+
+.viewer-desc { margin-top: var(--sp-2); }
+
+.viewer-desc-display {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+}
+
+.viewer-desc-text {
+  flex: 1;
+  font-size: var(--font-size-md);
+  line-height: 1.5;
+  min-height: 24px;
+}
+
+.btn-edit-desc { flex-shrink: 0; width: 32px; height: 32px; }
+.btn-edit-desc .material-symbols-outlined { font-size: 18px; }
+
+.viewer-desc-input {
+  font-size: var(--font-size-md);
+  resize: vertical;
+  min-height: 60px;
+}
+
+.viewer-desc-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+
+/* Hide nav arrows on mobile (use swipe) */
+@media (max-width: 768px) {
+  .viewer-nav { display: none; }
+}

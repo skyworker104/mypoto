@@ -1,0 +1,208 @@
+/* Timeline & Photo Grid */
+.timeline-grid {
+  padding-bottom: var(--sp-4);
+}
+
+.timeline-section {
+  margin-bottom: var(--sp-1);
+}
+
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--grid-cols), 1fr);
+  gap: var(--grid-gap);
+  padding: 0 var(--grid-gap);
+}
+
+.photo-thumb {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--color-surface-variant);
+  border-radius: 2px;
+}
+
+.photo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity var(--transition-normal);
+}
+
+.photo-thumb img.lazy-img:not(.lazy-loaded) {
+  opacity: 0;
+}
+
+.photo-thumb img.lazy-loaded {
+  opacity: 1;
+}
+
+.photo-thumb:hover {
+  opacity: 0.9;
+}
+
+.photo-thumb:active {
+  transform: scale(0.97);
+}
+
+/* Favorite badge on thumbnail */
+.thumb-fav {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  font-size: 16px;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  font-variation-settings: 'FILL' 1;
+}
+
+/* Check mark for selection mode */
+.thumb-check {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font-size: 22px;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+  pointer-events: none;
+}
+
+.select-mode .thumb-check {
+  opacity: 0.5;
+}
+
+.photo-thumb.selected .thumb-check {
+  opacity: 1;
+  color: var(--color-primary);
+  font-variation-settings: 'FILL' 1;
+}
+
+.photo-thumb.selected::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(26, 115, 232, 0.15);
+  pointer-events: none;
+}
+
+/* Selection action bar */
+.select-action-bar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  height: 56px;
+  padding: 0 var(--sp-2);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.select-action-bar .btn-icon { color: var(--color-on-primary); }
+.select-action-bar .btn-icon:hover { background: rgba(255,255,255,0.15); }
+.select-count { font-size: var(--font-size-lg); font-weight: 500; margin-left: var(--sp-2); }
+
+/* Upload drop zone */
+.upload-dropzone {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: rgba(26, 115, 232, 0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-4);
+  color: #fff;
+}
+
+.upload-dropzone .material-symbols-outlined {
+  font-size: 80px;
+}
+
+.upload-dropzone p {
+  font-size: var(--font-size-xl);
+  font-weight: 500;
+}
+
+/* Login page */
+.login-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: var(--sp-6);
+  background: var(--color-surface);
+}
+
+.login-card {
+  background: var(--color-bg);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-8);
+  text-align: center;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: var(--shadow-lg);
+}
+
+.login-icon {
+  font-size: 64px;
+  color: var(--color-primary);
+  margin-bottom: var(--sp-4);
+}
+
+.login-card h1 {
+  font-size: var(--font-size-2xl);
+  margin-bottom: var(--sp-1);
+}
+
+.login-card > .text-secondary {
+  margin-bottom: var(--sp-6);
+}
+
+.login-step { margin-top: var(--sp-4); }
+
+.login-hint {
+  font-size: var(--font-size-sm);
+  color: var(--color-on-surface-variant);
+  margin-bottom: var(--sp-4);
+}
+
+.pin-input-row {
+  display: flex;
+  gap: var(--sp-2);
+  justify-content: center;
+  margin-bottom: var(--sp-4);
+}
+
+.pin-digit {
+  width: 44px;
+  height: 52px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  text-align: center;
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+  background: var(--color-bg);
+  color: var(--color-on-bg);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.pin-digit:focus {
+  border-color: var(--color-primary);
+}
+
+.login-btn {
+  width: 100%;
+  height: 44px;
+}
+
+.login-status {
+  margin-top: var(--sp-3);
+  font-size: var(--font-size-sm);
+  min-height: 20px;
+}

@@ -1,0 +1,63 @@
+name: photonest
+description: PhotoNest - Family photo backup & viewing app
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod: ^2.4.9
+  riverpod_annotation: ^2.3.3
+
+  # Navigation
+  go_router: ^14.0.0
+
+  # HTTP & Network
+  dio: ^5.4.0
+  web_socket_channel: ^2.4.0
+  connectivity_plus: ^6.0.0
+
+  # Storage & Security
+  flutter_secure_storage: ^9.0.0
+  shared_preferences: ^2.2.0
+
+  # Photo & Media
+  photo_manager: ^3.0.0
+  cached_network_image: ^3.3.0
+  photo_view: ^0.15.0
+
+  # mDNS Discovery
+  bonsoir: ^5.1.0
+
+  # UI
+  cupertino_icons: ^1.0.6
+
+  # Camera
+  image_picker: ^1.0.0
+
+  # Speech
+  speech_to_text: ^7.0.0
+
+  # Crypto
+  crypto: ^3.0.3
+
+  # Utilities
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  riverpod_generator: ^2.3.9
+  build_runner: ^2.4.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/
