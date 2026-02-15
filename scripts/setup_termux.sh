@@ -79,9 +79,20 @@ echo "[5/7] pip으로 나머지 패키지 설치..."
 pip install --upgrade pip setuptools wheel 2>/dev/null
 
 # --- 웹 프레임워크 ---
+# uvicorn[standard]은 watchfiles(Rust 필요), uvloop, httptools 등을 포함하지만
+# Termux에서 Rust/C 컴파일이 실패하므로 uvicorn만 설치 후 필요한 것만 추가
 pip install \
     "fastapi==0.115.6" \
-    "uvicorn[standard]==0.34.0"
+    "uvicorn==0.34.0" \
+    "websockets>=13.0"
+
+# uvloop, httptools는 성능 향상용 (선택, 실패해도 무방)
+pip install "httptools>=0.6.0" 2>/dev/null \
+    && echo "  [OK] httptools" \
+    || echo "  [SKIP] httptools — 기본 HTTP 파서 사용"
+pip install "uvloop>=0.21.0" 2>/dev/null \
+    && echo "  [OK] uvloop" \
+    || echo "  [SKIP] uvloop — 기본 asyncio 루프 사용"
 
 # --- 데이터베이스 ---
 pip install \
