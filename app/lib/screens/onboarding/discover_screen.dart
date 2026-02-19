@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../config/app_config.dart';
 import '../../services/discovery_service.dart';
 import '../../models/server_info.dart';
 
@@ -43,8 +44,9 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
   void _connectManual() {
     final ip = _ipController.text.trim();
     if (ip.isEmpty) return;
-    final host = ip.contains(':') ? ip : '$ip:8080';
-    context.push('/pin', extra: 'http://$host');
+    // Always use default port - user only enters IP address
+    final cleanIp = ip.replaceAll(RegExp(r':\d+$'), '');
+    context.push('/pin', extra: 'http://$cleanIp:${AppConfig.defaultPort}');
   }
 
   @override
@@ -118,7 +120,12 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
               // Manual IP entry
               const Divider(),
               const SizedBox(height: 8),
-              Text('직접 입력', style: Theme.of(context).textTheme.titleSmall),
+              Text('서버 IP 직접 입력', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 4),
+              Text('포트는 자동으로 ${AppConfig.defaultPort}이 사용됩니다',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.grey,
+                      )),
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -126,11 +133,14 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                     child: TextField(
                       controller: _ipController,
                       decoration: const InputDecoration(
-                        hintText: '192.168.1.100:8080',
+                        hintText: '192.168.1.100',
                         border: OutlineInputBorder(),
                         isDense: true,
+                        prefixIcon: Icon(Icons.wifi, size: 20),
                       ),
-                      keyboardType: TextInputType.url,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       onSubmitted: (_) => _connectManual(),
                     ),
                   ),

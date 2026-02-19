@@ -80,12 +80,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         setState(() {
           _serverPhotoCount = data['photo_count'] ?? 0;
           _serverTotalSize = _formatBytes(data['total_size_bytes'] ?? 0);
-          final storage = data['storage'] as Map<String, dynamic>?;
-          if (storage != null) {
-            final total = _formatBytes(storage['total_bytes'] ?? 0);
-            final used = _formatBytes(storage['used_bytes'] ?? 0);
+          final totalBytes = data['storage_total_bytes'];
+          final usedBytes = data['storage_used_bytes'];
+          if (totalBytes != null) {
+            final total = _formatBytes(totalBytes);
+            final used = _formatBytes(usedBytes ?? 0);
             _serverUsagePercent =
-                (storage['usage_percent'] as num?)?.toDouble() ?? 0;
+                (data['storage_usage_percent'] as num?)?.toDouble() ?? 0;
             _serverStorageInfo = '$used / $total';
           }
         });
