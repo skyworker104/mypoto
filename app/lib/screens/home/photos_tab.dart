@@ -92,35 +92,10 @@ class _PhotosTabState extends ConsumerState<PhotosTab> {
           children: [
             const Text('PhotoNest'),
             const SizedBox(width: 8),
-            // Connectivity indicator — tap to toggle force-offline
-            GestureDetector(
-              onTap: () {
-                final notifier = ref.read(connectivityProvider.notifier);
-                notifier.toggleForceOffline();
-                final forced = notifier.isForceOffline;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(forced
-                        ? '오프라인 모드 강제 활성화 (디버그)'
-                        : '실제 연결 상태로 복원'),
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
-              },
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: ref.read(connectivityProvider.notifier).isForceOffline
-                    ? BoxDecoration(
-                        border: Border.all(color: Colors.red, width: 1.5),
-                        borderRadius: BorderRadius.circular(12),
-                      )
-                    : null,
-                child: Icon(
-                  isOnline ? Icons.cloud_done : Icons.cloud_off,
-                  size: 16,
-                  color: isOnline ? Colors.green : Colors.orange,
-                ),
-              ),
+            Icon(
+              isOnline ? Icons.cloud_done : Icons.cloud_off,
+              size: 16,
+              color: isOnline ? Colors.green : Colors.orange,
             ),
           ],
         ),

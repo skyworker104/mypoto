@@ -4,10 +4,13 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'config/theme.dart';
 import 'config/router.dart';
 import 'providers/auth_provider.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('ko');
+  await NotificationService.init();
+  await NotificationService.requestPermission();
   runApp(const ProviderScope(child: PhotoNestApp()));
 }
 

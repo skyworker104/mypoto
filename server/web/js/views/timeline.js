@@ -340,6 +340,16 @@ function _appendPhotosToGrid(grid, photos) {
         }),
       ]);
 
+      if (photo.is_video) {
+        thumb.appendChild(el('span', { className: 'thumb-video material-symbols-outlined', textContent: 'play_circle' }));
+        if (photo.duration) {
+          const dur = photo.duration;
+          const m = Math.floor(dur / 60).toString().padStart(2, '0');
+          const s = Math.floor(dur % 60).toString().padStart(2, '0');
+          thumb.appendChild(el('span', { className: 'thumb-duration', textContent: `${m}:${s}` }));
+        }
+      }
+
       if (photo.is_favorite) {
         thumb.appendChild(el('span', { className: 'thumb-fav material-symbols-outlined', textContent: 'favorite' }));
       }

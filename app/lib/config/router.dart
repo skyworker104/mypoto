@@ -6,6 +6,7 @@ import '../screens/home/home_screen.dart';
 import '../screens/photo_viewer/photo_viewer_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/settings/photo_picker_screen.dart';
+import '../screens/settings/backup_log_screen.dart';
 
 final router = GoRouter(
   initialLocation: '/discover',
@@ -46,6 +47,11 @@ final router = GoRouter(
     GoRoute(
       path: '/pick-photos',
       builder: (_, __) => const PhotoPickerScreen(),
+    ),
+    // Backup log
+    GoRoute(
+      path: '/backup-log',
+      builder: (_, __) => const BackupLogScreen(),
     ),
   ],
 );

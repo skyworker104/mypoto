@@ -48,7 +48,7 @@ class LocalPhotoNotifier extends StateNotifier<LocalPhotoState> {
       }
 
       final albums = await PhotoManager.getAssetPathList(
-        type: RequestType.image,
+        type: RequestType.common,
       );
       if (albums.isEmpty) {
         state = state.copyWith(isLoading: false, hasMore: false);
@@ -84,7 +84,7 @@ class LocalPhotoNotifier extends StateNotifier<LocalPhotoState> {
 
     try {
       final albums = await PhotoManager.getAssetPathList(
-        type: RequestType.image,
+        type: RequestType.common,
       );
       if (albums.isEmpty) {
         state = state.copyWith(isLoading: false, hasMore: false);

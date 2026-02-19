@@ -7,7 +7,13 @@ from sqlmodel import Session, select, col, func
 from server.config import settings
 from server.models.photo import Photo
 from server.utils.exif import extract_exif
-from server.utils.image import compute_file_hash, generate_thumbnails, get_image_dimensions
+from server.utils.image import (
+    compute_file_hash,
+    generate_thumbnails,
+    generate_video_thumbnails,
+    get_image_dimensions,
+    get_video_metadata,
+)
 from server.utils.storage import get_photo_storage_path
 
 # Supported MIME types
@@ -80,10 +86,28 @@ def upload_photo(
     file_path = storage_path / out_filename
     file_path.write_bytes(file_data)
 
-    # 4. Get dimensions & generate thumbnails (images only)
+    # 4. Get dimensions & generate thumbnails
     width, height = None, None
     thumb_path = None
-    if not is_video:
+    duration = None
+    if is_video:
+        # Video: extract metadata and thumbnails via FFmpeg
+        try:
+            meta = get_video_metadata(file_path)
+            width = meta.get("width")
+            height = meta.get("height")
+            duration = meta.get("duration")
+        except Exception:
+            pass
+        try:
+            thumb_results = generate_video_thumbnails(
+                file_path, settings.thumbnail_dir, file_hash[:16]
+            )
+            thumb_path = thumb_results.get("small")
+        except Exception:
+            pass
+    else:
+        # Image: extract dimensions and generate thumbnails from bytes
         try:
             width, height = get_image_dimensions(file_data)
         except Exception:
@@ -111,6 +135,7 @@ def upload_photo(
         camera_model=exif_data.get("camera_model"),
         exif_data=exif_data.get("exif_json"),
         is_video=is_video,
+        duration=duration,
     )
     session.add(photo)
     session.commit()

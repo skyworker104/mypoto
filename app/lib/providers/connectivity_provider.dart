@@ -13,8 +13,6 @@ final connectivityProvider = StateNotifierProvider<ConnectivityNotifier,
 class ConnectivityNotifier extends StateNotifier<ServerConnectivityState> {
   final ConnectivityService _service = ConnectivityService();
   StreamSubscription? _sub;
-  bool _forceOffline = false;
-  ServerConnectivityState _realState = const ServerConnectivityState();
 
   ConnectivityNotifier(String? baseUrl)
       : super(const ServerConnectivityState()) {
@@ -22,33 +20,12 @@ class ConnectivityNotifier extends StateNotifier<ServerConnectivityState> {
       final serverUrl = baseUrl.replaceAll('/api/v1', '');
       _service.startMonitoring(serverUrl);
       _sub = _service.stream.listen((s) {
-        _realState = s;
-        _applyState();
+        state = s;
       });
     }
   }
 
   ConnectivityService get service => _service;
-
-  /// Whether force-offline debug mode is active.
-  bool get isForceOffline => _forceOffline;
-
-  /// Toggle force-offline mode for testing.
-  void toggleForceOffline() {
-    _forceOffline = !_forceOffline;
-    _applyState();
-  }
-
-  void _applyState() {
-    if (_forceOffline) {
-      state = const ServerConnectivityState(
-        isWiFi: false,
-        isServerReachable: false,
-      );
-    } else {
-      state = _realState;
-    }
-  }
 
   Future<void> checkNow() async {
     await _service.checkNow();

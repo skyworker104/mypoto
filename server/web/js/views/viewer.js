@@ -44,6 +44,7 @@ export function init(container) {
       <div class="viewer-body">
         <div class="viewer-image-wrap" id="viewer-img-wrap">
           <img class="viewer-image" id="viewer-img" alt="" />
+          <video class="viewer-video" id="viewer-video" controls playsinline style="display:none"></video>
         </div>
         <div class="viewer-info-panel" id="viewer-info-panel" style="display:none">
           <div class="info-panel-header">
@@ -136,9 +137,23 @@ async function _loadPhoto(id) {
     if (_infoPanelOpen) _renderInfoPanel();
 
     const imgEl = _el.querySelector('#viewer-img');
-    imgEl.src = '';
-    const url = await fetchImageUrl(`/photos/${id}/file`);
-    if (url) imgEl.src = url;
+    const videoEl = _el.querySelector('#viewer-video');
+
+    if (_photo.is_video) {
+      imgEl.style.display = 'none';
+      imgEl.src = '';
+      videoEl.style.display = '';
+      const url = await fetchImageUrl(`/photos/${id}/file`);
+      if (url) videoEl.src = url;
+    } else {
+      videoEl.style.display = 'none';
+      videoEl.src = '';
+      videoEl.pause();
+      imgEl.style.display = '';
+      imgEl.src = '';
+      const url = await fetchImageUrl(`/photos/${id}/file`);
+      if (url) imgEl.src = url;
+    }
   } catch (e) {
     console.error('Viewer load error:', e);
   }

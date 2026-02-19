@@ -3,6 +3,8 @@ import 'package:crypto/crypto.dart';
 import 'package:photo_manager/photo_manager.dart';
 import '../config/app_config.dart';
 import 'api_client.dart';
+import 'backup_log_service.dart';
+import 'notification_service.dart';
 import 'sync_cache.dart';
 
 /// Backup state enum.
@@ -14,6 +16,7 @@ class BackupProgress {
   final int totalPhotos;
   final int uploadedPhotos;
   final int skippedPhotos;
+  final int failedPhotos;
   final String? currentFile;
   final String? errorMessage;
 
@@ -22,24 +25,28 @@ class BackupProgress {
     this.totalPhotos = 0,
     this.uploadedPhotos = 0,
     this.skippedPhotos = 0,
+    this.failedPhotos = 0,
     this.currentFile,
     this.errorMessage,
   });
 
   double get percent =>
-      totalPhotos > 0 ? (uploadedPhotos + skippedPhotos) / totalPhotos : 0;
+      totalPhotos > 0 ? (uploadedPhotos + skippedPhotos + failedPhotos) / totalPhotos : 0;
 }
 
-/// Automatic photo backup service.
-/// Scans device gallery, checks for duplicates, uploads new photos.
+/// Photo/video backup service.
+/// Scans device gallery, checks local sync cache first to skip
+/// already-backed-up files, then batch-checks server for remaining,
+/// and uploads new files with retry, logging, and notifications.
 class BackupService {
   final ApiClient _api;
   final SyncStateCache _syncCache;
+  final BackupLogService _log;
   final _progressController = StreamController<BackupProgress>.broadcast();
   BackupProgress _progress = const BackupProgress();
   bool _cancelled = false;
 
-  BackupService(this._api, this._syncCache);
+  BackupService(this._api, this._syncCache, this._log);
 
   Stream<BackupProgress> get progressStream => _progressController.stream;
   BackupProgress get progress => _progress;
@@ -51,21 +58,19 @@ class BackupService {
   }
 
   /// Start full backup process.
-  /// If [albumFilter] is provided, only scan those album IDs.
   Future<void> startBackup({List<String>? albumFilter}) async {
     _cancelled = false;
     _emit(const BackupProgress(state: BackupState.scanning));
 
-    // 1. Get all photos from device
+    // 1. Get all photos + videos from device
     final albums = await PhotoManager.getAssetPathList(
-      type: RequestType.common, // photos + videos
+      type: RequestType.common,
     );
     if (albums.isEmpty) {
       _emit(const BackupProgress(state: BackupState.complete));
       return;
     }
 
-    // Filter albums if specified
     final targetAlbums = albumFilter != null && albumFilter.isNotEmpty
         ? albums.where((a) => albumFilter.contains(a.id)).toList()
         : albums;
@@ -75,7 +80,7 @@ class BackupService {
       return;
     }
 
-    // Get all assets
+    // Collect all assets
     List<AssetEntity> allAssets = [];
     for (final album in targetAlbums) {
       final count = await album.assetCountAsync;
@@ -87,21 +92,40 @@ class BackupService {
     final seen = <String>{};
     allAssets = allAssets.where((a) => seen.add(a.id)).toList();
 
+    // 2. Skip already-synced assets using local cache (no server call)
+    await _syncCache.load();
+    final unsyncedAssets = <AssetEntity>[];
+    int localSkipped = 0;
+    for (final asset in allAssets) {
+      if (_syncCache.isAssetSynced(asset.id)) {
+        localSkipped++;
+      } else {
+        unsyncedAssets.add(asset);
+      }
+    }
+
     _emit(BackupProgress(
       state: BackupState.uploading,
       totalPhotos: allAssets.length,
+      skippedPhotos: localSkipped,
     ));
 
-    // 2. Check duplicates in batches
-    int uploaded = 0;
-    int skipped = 0;
+    NotificationService.showProgress(
+      current: localSkipped,
+      total: allAssets.length,
+    );
 
-    for (var i = 0; i < allAssets.length; i += AppConfig.batchCheckSize) {
+    // 3. Process unsynced assets in batches
+    int uploaded = 0;
+    int skipped = localSkipped;
+    int failed = 0;
+
+    for (var i = 0; i < unsyncedAssets.length; i += AppConfig.batchCheckSize) {
       if (_cancelled) break;
 
-      final batch = allAssets.sublist(
+      final batch = unsyncedAssets.sublist(
         i,
-        (i + AppConfig.batchCheckSize).clamp(0, allAssets.length),
+        (i + AppConfig.batchCheckSize).clamp(0, unsyncedAssets.length),
       );
 
       // Compute hashes for batch
@@ -115,7 +139,7 @@ class BackupService {
         _syncCache.addLocalHash(asset.id, hash);
       }
 
-      // Check which already exist on server
+      // Check server for remaining duplicates
       try {
         final resp = await _api.post('/photos/check', data: {
           'hashes': hashMap.keys.toList(),
@@ -123,27 +147,35 @@ class BackupService {
         final existing = Set<String>.from(resp.data['existing'] ?? []);
         final newHashes = hashMap.keys.where((h) => !existing.contains(h));
 
-        // Update sync cache with existing hashes
         _syncCache.markExistingHashes(existing);
-
         skipped += existing.length;
 
-        // 3. Upload new photos
+        // Upload new files
         for (final hash in newHashes) {
           if (_cancelled) break;
           final asset = hashMap[hash]!;
           final file = await asset.file;
           if (file == null) continue;
 
+          final isVideo = asset.type == AssetType.video;
+          final filename = asset.title ?? (isVideo ? 'video' : 'photo');
+
           _emit(BackupProgress(
             state: BackupState.uploading,
             totalPhotos: allAssets.length,
             uploadedPhotos: uploaded,
             skippedPhotos: skipped,
-            currentFile: asset.title ?? 'photo',
+            failedPhotos: failed,
+            currentFile: filename,
           ));
 
-          // Upload with retry
+          NotificationService.showProgress(
+            current: uploaded + skipped + failed,
+            total: allAssets.length,
+            filename: filename,
+          );
+
+          bool success = false;
           for (var retry = 0; retry < AppConfig.maxRetries; retry++) {
             try {
               final uploadResp = await _api.upload('/photos/upload',
@@ -153,35 +185,54 @@ class BackupService {
               if (photoId != null) {
                 _syncCache.addMapping(hash, photoId);
               }
+              success = true;
               break;
             } catch (e) {
               if (retry == AppConfig.maxRetries - 1) {
-                // Skip this file after max retries
+                failed++;
+                await _log.logError('업로드 실패: $e', filename: filename);
               }
               await Future.delayed(Duration(seconds: retry + 1));
             }
           }
+          if (!success) {
+            // Already logged above
+          }
         }
       } catch (e) {
+        await _log.logError('배치 처리 오류: $e');
         _emit(BackupProgress(
           state: BackupState.error,
           totalPhotos: allAssets.length,
           uploadedPhotos: uploaded,
           skippedPhotos: skipped,
+          failedPhotos: failed,
           errorMessage: e.toString(),
         ));
+        NotificationService.showError('백업 오류: $e');
         return;
       }
     }
 
     await _syncCache.save();
+    await _log.logSummary(uploaded, skipped - localSkipped, failed);
 
+    final finalState = _cancelled ? BackupState.paused : BackupState.complete;
     _emit(BackupProgress(
-      state: _cancelled ? BackupState.paused : BackupState.complete,
+      state: finalState,
       totalPhotos: allAssets.length,
       uploadedPhotos: uploaded,
       skippedPhotos: skipped,
+      failedPhotos: failed,
     ));
+
+    if (!_cancelled) {
+      NotificationService.showComplete(
+        uploaded: uploaded,
+        skipped: skipped,
+        failed: failed,
+      );
+    }
   }
 
   /// Upload specific assets (for manual upload).
@@ -194,6 +245,7 @@ class BackupService {
 
     int uploaded = 0;
     int skipped = 0;
+    int failed = 0;
 
     for (var i = 0; i < assets.length; i += AppConfig.batchCheckSize) {
       if (_cancelled) break;
@@ -228,12 +280,15 @@ class BackupService {
           final file = await asset.file;
           if (file == null) continue;
 
+          final filename = asset.title ?? (asset.type == AssetType.video ? 'video' : 'photo');
+
           _emit(BackupProgress(
             state: BackupState.uploading,
             totalPhotos: assets.length,
             uploadedPhotos: uploaded,
             skippedPhotos: skipped,
-            currentFile: asset.title ?? 'photo',
+            failedPhotos: failed,
+            currentFile: filename,
           ));
 
           for (var retry = 0; retry < AppConfig.maxRetries; retry++) {
@@ -247,17 +302,22 @@ class BackupService {
               }
               break;
             } catch (e) {
-              if (retry == AppConfig.maxRetries - 1) break;
+              if (retry == AppConfig.maxRetries - 1) {
+                failed++;
+                await _log.logError('업로드 실패: $e', filename: filename);
+              }
               await Future.delayed(Duration(seconds: retry + 1));
             }
           }
         }
       } catch (e) {
+        await _log.logError('배치 처리 오류: $e');
         _emit(BackupProgress(
           state: BackupState.error,
           totalPhotos: assets.length,
           uploadedPhotos: uploaded,
           skippedPhotos: skipped,
+          failedPhotos: failed,
           errorMessage: e.toString(),
         ));
         return;
@@ -265,12 +325,14 @@ class BackupService {
     }
 
     await _syncCache.save();
+    await _log.logSummary(uploaded, skipped, failed);
 
     _emit(BackupProgress(
       state: _cancelled ? BackupState.paused : BackupState.complete,
       totalPhotos: assets.length,
       uploadedPhotos: uploaded,
       skippedPhotos: skipped,
+      failedPhotos: failed,
     ));
   }
 
