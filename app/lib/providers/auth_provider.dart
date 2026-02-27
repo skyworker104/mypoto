@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/auth.dart';
 import '../models/server_info.dart';
@@ -19,8 +18,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
   UserProfile? get profile => _profile;
 
   /// Try restoring saved session.
-  /// If stored credentials exist, treat as authenticated even if
-  /// server is unreachable (offline mode will handle the rest).
+  /// If stored credentials exist, immediately authenticate (no network call).
+  /// Profile is loaded later asynchronously when server becomes reachable.
   Future<void> tryRestore() async {
     final ok = await _api.restoreSession();
     if (!ok) {
@@ -28,20 +27,21 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return;
     }
 
-    // Credentials exist - try quick server check (3s timeout)
+    // Credentials exist → immediately go authenticated (offline-safe)
+    state = AuthState.authenticated;
+
+    // Load profile in background (fire-and-forget)
+    _loadProfileAsync();
+  }
+
+  /// Load user profile asynchronously. Does not block app startup.
+  Future<void> _loadProfileAsync() async {
     try {
-      final resp = await _api.dio.get(
-        '/users/me',
-        options: Options(
-          sendTimeout: const Duration(seconds: 3),
-          receiveTimeout: const Duration(seconds: 3),
-        ),
-      );
+      final resp = await _api.get('/users/me');
       _profile = UserProfile.fromJson(resp.data);
     } catch (_) {
-      // Server unreachable, but we have saved credentials → offline mode
+      // Server unreachable → offline mode, profile stays null
     }
-    state = AuthState.authenticated;
   }
 
   /// Start pairing with a discovered server.
