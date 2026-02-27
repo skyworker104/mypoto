@@ -4,6 +4,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'config/theme.dart';
 import 'config/router.dart';
 import 'providers/auth_provider.dart';
+import 'providers/connectivity_provider.dart';
 import 'services/notification_service.dart';
 
 void main() async {
@@ -30,7 +31,10 @@ class _PhotoNestAppState extends ConsumerState<PhotoNestApp> {
     Future.microtask(() async {
       await ref.read(authProvider.notifier).tryRestore();
       final authState = ref.read(authProvider);
+
+      // Pre-initialize connectivity check before home screen loads
       if (authState == AuthState.authenticated) {
+        ref.read(connectivityProvider);
         router.go('/home');
       }
       if (mounted) setState(() => _initialized = true);
