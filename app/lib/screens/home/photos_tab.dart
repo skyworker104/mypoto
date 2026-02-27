@@ -28,6 +28,7 @@ class PhotosTab extends ConsumerStatefulWidget {
 class _PhotosTabState extends ConsumerState<PhotosTab> {
   StreamSubscription? _connectivitySub;
   bool _autoBackupTriggered = false;
+  bool? _wasOnline;
 
   @override
   void initState() {
@@ -49,6 +50,21 @@ class _PhotosTabState extends ConsumerState<PhotosTab> {
   }
 
   void _handleConnectivityChange(ServerConnectivityState state) {
+    // Show brief message on offline transition
+    if (_wasOnline != false && !state.isServerReachable && mounted) {
+      final msg = state.isWiFi
+          ? '동일 WiFi 존이 아닙니다'
+          : 'WiFi OFF 상태입니다';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+    _wasOnline = state.isServerReachable;
+
     // Auto-backup when WiFi + server reachable
     if (state.isWiFi && state.isServerReachable && !_autoBackupTriggered) {
       final settings = ref.read(settingsProvider);
@@ -175,62 +191,32 @@ class _PhotosTabState extends ConsumerState<PhotosTab> {
   Widget _buildOfflineView() {
     final localState = ref.watch(localPhotoProvider);
     final syncCache = ref.read(syncCacheProvider);
-    final connState = ref.watch(connectivityProvider);
 
-    return Column(
-      children: [
-        // Offline banner with WiFi zone info
-        Container(
-          width: double.infinity,
-          color: Colors.orange.shade100,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Row(
-            children: [
-              Icon(Icons.wifi_off, size: 18, color: Colors.orange.shade800),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  connState.isWiFi
-                      ? '서버와 같은 WiFi 존이 아닙니다. 로컬 사진만 표시됩니다.'
-                      : '오프라인 모드 - 기기 사진만 표시됩니다',
-                  style: TextStyle(
-                    color: Colors.orange.shade800,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-            ],
-          ),
+    if (localState.photos.isEmpty && localState.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (localState.photos.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.photo_library_outlined, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text('기기에 사진이 없습니다',
+                style: TextStyle(color: Colors.grey, fontSize: 16)),
+          ],
         ),
-        Expanded(
-          child: localState.photos.isEmpty && localState.isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : localState.photos.isEmpty
-                  ? const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.photo_library_outlined,
-                              size: 64, color: Colors.grey),
-                          SizedBox(height: 16),
-                          Text('기기에 사진이 없습니다',
-                              style:
-                                  TextStyle(color: Colors.grey, fontSize: 16)),
-                        ],
-                      ),
-                    )
-                  : LocalPhotoGrid(
-                      photos: localState.photos,
-                      onLoadMore: () {
-                        ref.read(localPhotoProvider.notifier).loadMore();
-                      },
-                      isLoadingMore: localState.isLoading,
-                      hasMore: localState.hasMore,
-                      isAssetSynced: (assetId) =>
-                          syncCache.isAssetSynced(assetId),
-                    ),
-        ),
-      ],
+      );
+    }
+
+    return LocalPhotoGrid(
+      photos: localState.photos,
+      onLoadMore: () {
+        ref.read(localPhotoProvider.notifier).loadMore();
+      },
+      isLoadingMore: localState.isLoading,
+      hasMore: localState.hasMore,
+      isAssetSynced: (assetId) => syncCache.isAssetSynced(assetId),
     );
   }
 

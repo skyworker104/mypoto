@@ -47,9 +47,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(connectivity.isWiFi
-                    ? '서버에 연결할 수 없습니다. 같은 WiFi 네트워크인지 확인해주세요.'
-                    : 'WiFi에 연결되어 있지 않습니다. 서버와 같은 WiFi에 연결해주세요.'),
+                    ? '동일 WiFi 존이 아닙니다'
+                    : 'WiFi OFF 상태입니다'),
                 duration: const Duration(seconds: 2),
+                behavior: SnackBarBehavior.floating,
               ),
             );
             return;
