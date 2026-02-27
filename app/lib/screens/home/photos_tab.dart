@@ -34,11 +34,15 @@ class _PhotosTabState extends ConsumerState<PhotosTab> {
   void initState() {
     super.initState();
     Future.microtask(() {
-      ref.read(photoTimelineProvider.notifier).loadInitial();
-      // Load local photos for offline mode
+      // Load local photos first (always available)
       ref.read(localPhotoProvider.notifier).load();
       // Start connectivity monitoring
       _startConnectivityMonitoring();
+      // Only load server photos if connectivity looks possible
+      final connectivity = ref.read(connectivityProvider);
+      if (connectivity.isServerReachable || connectivity.isWiFi) {
+        ref.read(photoTimelineProvider.notifier).loadInitial();
+      }
     });
   }
 
@@ -64,6 +68,11 @@ class _PhotosTabState extends ConsumerState<PhotosTab> {
       );
     }
     _wasOnline = state.isServerReachable;
+
+    // Load server photos when coming online
+    if (state.isServerReachable) {
+      ref.read(photoTimelineProvider.notifier).loadInitial();
+    }
 
     // Auto-backup when WiFi + server reachable
     if (state.isWiFi && state.isServerReachable && !_autoBackupTriggered) {

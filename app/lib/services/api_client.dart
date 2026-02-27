@@ -55,20 +55,29 @@ class ApiClient {
   }
 
   Future<bool> restoreSession() async {
-    final baseUrl = await _storage.read(key: 'base_url');
-    final accessToken = await _storage.read(key: 'access_token');
-    final refreshToken = await _storage.read(key: 'refresh_token');
-    final deviceId = await _storage.read(key: 'device_id');
+    try {
+      final baseUrl = await _storage.read(key: 'base_url')
+          .timeout(const Duration(seconds: 2));
+      final accessToken = await _storage.read(key: 'access_token')
+          .timeout(const Duration(seconds: 2));
+      final refreshToken = await _storage.read(key: 'refresh_token')
+          .timeout(const Duration(seconds: 2));
+      final deviceId = await _storage.read(key: 'device_id')
+          .timeout(const Duration(seconds: 2));
 
-    if (baseUrl == null || accessToken == null) return false;
+      if (baseUrl == null || accessToken == null) return false;
 
-    await configure(
-      baseUrl: baseUrl,
-      accessToken: accessToken,
-      refreshToken: refreshToken,
-      deviceId: deviceId,
-    );
-    return true;
+      await configure(
+        baseUrl: baseUrl,
+        accessToken: accessToken,
+        refreshToken: refreshToken,
+        deviceId: deviceId,
+      );
+      return true;
+    } catch (_) {
+      // SecureStorage failure (e.g. Keystore issue after reinstall)
+      return false;
+    }
   }
 
   Future<void> clearSession() async {

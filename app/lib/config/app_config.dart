@@ -6,8 +6,8 @@ class AppConfig {
   // API
   static const int defaultPort = 8080;
   static const String apiPrefix = '/api/v1';
-  static const Duration connectTimeout = Duration(seconds: 10);
-  static const Duration receiveTimeout = Duration(seconds: 30);
+  static const Duration connectTimeout = Duration(seconds: 5);
+  static const Duration receiveTimeout = Duration(seconds: 15);
 
   // Thumbnails
   static const int gridColumnsDefault = 4;

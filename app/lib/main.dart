@@ -29,7 +29,16 @@ class _PhotoNestAppState extends ConsumerState<PhotoNestApp> {
   void initState() {
     super.initState();
     Future.microtask(() async {
-      await ref.read(authProvider.notifier).tryRestore();
+      // Restore session with 5s safety timeout to prevent infinite splash
+      try {
+        await ref
+            .read(authProvider.notifier)
+            .tryRestore()
+            .timeout(const Duration(seconds: 5));
+      } catch (_) {
+        // Timeout or error → treat as unauthenticated
+      }
+
       final authState = ref.read(authProvider);
 
       // Pre-initialize connectivity check before home screen loads
