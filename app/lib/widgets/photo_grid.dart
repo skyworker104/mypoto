@@ -15,6 +15,7 @@ class PhotoGrid extends StatefulWidget {
   final void Function(Photo photo) onPhotoTap;
   final VoidCallback onLoadMore;
   final bool isLoadingMore;
+  final bool hasMore;
   final int columns;
   final Map<String, String>? httpHeaders;
   final Map<String, SyncStatus>? syncStatusMap;
@@ -25,6 +26,7 @@ class PhotoGrid extends StatefulWidget {
     required this.onPhotoTap,
     required this.onLoadMore,
     this.isLoadingMore = false,
+    this.hasMore = true,
     this.columns = 4,
     this.httpHeaders,
     this.syncStatusMap,
@@ -112,12 +114,30 @@ class _PhotoGridState extends State<PhotoGrid> {
             ),
           ),
         ],
-        // Loading indicator
+        // Loading indicator or end-of-list
         if (widget.isLoadingMore)
           const SliverPadding(
             padding: EdgeInsets.all(16),
             sliver: SliverToBoxAdapter(
               child: Center(child: CircularProgressIndicator()),
+            ),
+          )
+        else if (!widget.hasMore && widget.photos.isNotEmpty)
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            sliver: SliverToBoxAdapter(
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(Icons.check_circle_outline,
+                        size: 32, color: Colors.grey[400]),
+                    const SizedBox(height: 8),
+                    Text('모든 사진을 불러왔습니다',
+                        style: TextStyle(
+                            color: Colors.grey[500], fontSize: 13)),
+                  ],
+                ),
+              ),
             ),
           ),
       ],
@@ -213,6 +233,7 @@ class LocalPhotoGrid extends StatefulWidget {
   final void Function(AssetEntity asset)? onPhotoTap;
   final VoidCallback onLoadMore;
   final bool isLoadingMore;
+  final bool hasMore;
   final int columns;
   final bool Function(String assetId)? isAssetSynced;
 
@@ -222,6 +243,7 @@ class LocalPhotoGrid extends StatefulWidget {
     this.onPhotoTap,
     required this.onLoadMore,
     this.isLoadingMore = false,
+    this.hasMore = true,
     this.columns = 4,
     this.isAssetSynced,
   });
@@ -313,6 +335,24 @@ class _LocalPhotoGridState extends State<LocalPhotoGrid> {
             padding: EdgeInsets.all(16),
             sliver: SliverToBoxAdapter(
               child: Center(child: CircularProgressIndicator()),
+            ),
+          )
+        else if (!widget.hasMore && widget.photos.isNotEmpty)
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            sliver: SliverToBoxAdapter(
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(Icons.check_circle_outline,
+                        size: 32, color: Colors.grey[400]),
+                    const SizedBox(height: 8),
+                    Text('모든 사진을 불러왔습니다',
+                        style: TextStyle(
+                            color: Colors.grey[500], fontSize: 13)),
+                  ],
+                ),
+              ),
             ),
           ),
       ],

@@ -1,5 +1,7 @@
 """System status API endpoints."""
 
+import socket
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlmodel import Session, func, select
 
@@ -10,6 +12,18 @@ from server.models.photo import Photo
 from server.models.user import User
 from server.schemas.photo import SystemStatusResponse
 from server.utils.storage import get_storage_info
+
+
+def _get_local_ip() -> str:
+    """Get the actual local network IP (WiFi/LAN), not 0.0.0.0."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
 
 router = APIRouter(prefix="/system", tags=["system"])
 
@@ -53,10 +67,10 @@ def system_status(
         select(func.coalesce(func.sum(Photo.file_size), 0)).where(Photo.status == "active")
     ).one()
 
-    # Build server URL from request host header
-    host_header = request_obj.headers.get("host", f"{settings.host}:{settings.port}")
+    # Build server URL using actual local network IP
+    local_ip = _get_local_ip()
     scheme = request_obj.headers.get("x-forwarded-proto", "http")
-    server_url = f"{scheme}://{host_header}"
+    server_url = f"{scheme}://{local_ip}:{settings.port}"
 
     return SystemStatusResponse(
         server_name=settings.server_name,

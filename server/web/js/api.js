@@ -71,7 +71,7 @@ export async function apiDelete(path) {
  * Uses LRU cache to limit memory.
  */
 const _imageCache = new Map();
-const IMAGE_CACHE_MAX = 200;
+const IMAGE_CACHE_MAX = 500;
 
 export async function fetchImageUrl(path) {
   if (_imageCache.has(path)) return _imageCache.get(path);

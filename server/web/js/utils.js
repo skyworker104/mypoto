@@ -13,6 +13,17 @@ export function formatDateKo(dateStr) {
   return `${d.getFullYear()}년 ${KO_MONTHS[d.getMonth()]} ${d.getDate()}일 ${KO_DAYS[d.getDay()]}요일`;
 }
 
+/** "2025년 3월 15일 14:30:00" - date with time */
+export function formatDateTimeKo(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d)) return dateStr;
+  const hh = d.getHours().toString().padStart(2, '0');
+  const mm = d.getMinutes().toString().padStart(2, '0');
+  const ss = d.getSeconds().toString().padStart(2, '0');
+  return `${d.getFullYear()}년 ${KO_MONTHS[d.getMonth()]} ${d.getDate()}일 ${hh}:${mm}:${ss}`;
+}
+
 /** "2025. 3. 15" */
 export function formatDateShort(dateStr) {
   if (!dateStr) return '';

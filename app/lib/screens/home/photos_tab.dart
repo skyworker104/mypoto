@@ -158,6 +158,7 @@ class _PhotosTabState extends ConsumerState<PhotosTab> {
         ref.read(photoTimelineProvider.notifier).loadMore();
       },
       isLoadingMore: state.isLoading,
+      hasMore: state.nextCursor != null,
     );
   }
 
@@ -174,23 +175,28 @@ class _PhotosTabState extends ConsumerState<PhotosTab> {
   Widget _buildOfflineView() {
     final localState = ref.watch(localPhotoProvider);
     final syncCache = ref.read(syncCacheProvider);
+    final connState = ref.watch(connectivityProvider);
 
     return Column(
       children: [
-        // Offline banner
+        // Offline banner with WiFi zone info
         Container(
           width: double.infinity,
           color: Colors.orange.shade100,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             children: [
-              Icon(Icons.cloud_off, size: 18, color: Colors.orange.shade800),
+              Icon(Icons.wifi_off, size: 18, color: Colors.orange.shade800),
               const SizedBox(width: 8),
-              Text(
-                '오프라인 모드 - 기기 사진만 표시됩니다',
-                style: TextStyle(
-                  color: Colors.orange.shade800,
-                  fontSize: 13,
+              Expanded(
+                child: Text(
+                  connState.isWiFi
+                      ? '서버와 같은 WiFi 존이 아닙니다. 로컬 사진만 표시됩니다.'
+                      : '오프라인 모드 - 기기 사진만 표시됩니다',
+                  style: TextStyle(
+                    color: Colors.orange.shade800,
+                    fontSize: 13,
+                  ),
                 ),
               ),
             ],
@@ -219,6 +225,7 @@ class _PhotosTabState extends ConsumerState<PhotosTab> {
                         ref.read(localPhotoProvider.notifier).loadMore();
                       },
                       isLoadingMore: localState.isLoading,
+                      hasMore: localState.hasMore,
                       isAssetSynced: (assetId) =>
                           syncCache.isAssetSynced(assetId),
                     ),

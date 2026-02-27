@@ -1,22 +1,30 @@
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config/app_config.dart';
 
 /// Connectivity state for server reachability.
 class ServerConnectivityState {
   final bool isWiFi;
   final bool isServerReachable;
+  final bool isSameNetwork;
 
   const ServerConnectivityState({
     this.isWiFi = false,
     this.isServerReachable = false,
+    this.isSameNetwork = true,
   });
 
-  ServerConnectivityState copyWith({bool? isWiFi, bool? isServerReachable}) {
+  ServerConnectivityState copyWith({
+    bool? isWiFi,
+    bool? isServerReachable,
+    bool? isSameNetwork,
+  }) {
     return ServerConnectivityState(
       isWiFi: isWiFi ?? this.isWiFi,
       isServerReachable: isServerReachable ?? this.isServerReachable,
+      isSameNetwork: isSameNetwork ?? this.isSameNetwork,
     );
   }
 }
@@ -25,6 +33,7 @@ class ServerConnectivityState {
 class ConnectivityService {
   final Connectivity _connectivity = Connectivity();
   final _controller = StreamController<ServerConnectivityState>.broadcast();
+  final _storage = const FlutterSecureStorage();
   StreamSubscription? _subscription;
   Timer? _pingTimer;
   String? _serverBaseUrl;
@@ -57,7 +66,11 @@ class ConnectivityService {
     if (isWiFi || results.contains(ConnectivityResult.ethernet)) {
       await _checkServer();
     } else {
-      _state = _state.copyWith(isServerReachable: false);
+      // Not on WiFi - don't try to connect to server
+      _state = _state.copyWith(
+        isServerReachable: false,
+        isSameNetwork: false,
+      );
       _controller.add(_state);
     }
   }
@@ -72,9 +85,21 @@ class ConnectivityService {
       final resp = await dio.get(
         '$_serverBaseUrl${AppConfig.apiPrefix}/system/ping',
       );
-      _state = _state.copyWith(isServerReachable: resp.statusCode == 200);
+      final reachable = resp.statusCode == 200;
+      _state = _state.copyWith(
+        isServerReachable: reachable,
+        isSameNetwork: reachable,
+      );
+      // Save successful connection state
+      if (reachable) {
+        await _storage.write(
+            key: 'last_server_url', value: _serverBaseUrl);
+      }
     } catch (_) {
-      _state = _state.copyWith(isServerReachable: false);
+      _state = _state.copyWith(
+        isServerReachable: false,
+        isSameNetwork: false,
+      );
     }
     _controller.add(_state);
   }
@@ -82,6 +107,12 @@ class ConnectivityService {
   /// Force a connectivity check now.
   Future<void> checkNow() async {
     await _checkConnectivity();
+  }
+
+  /// Reconnect to a new server URL.
+  Future<void> reconnect(String newServerUrl) async {
+    _serverBaseUrl = newServerUrl;
+    await _checkServer();
   }
 
   void dispose() {

@@ -31,6 +31,10 @@ class ConnectivityNotifier extends StateNotifier<ServerConnectivityState> {
     await _service.checkNow();
   }
 
+  Future<void> reconnect(String newServerUrl) async {
+    await _service.reconnect(newServerUrl);
+  }
+
   @override
   void dispose() {
     _sub?.cancel();

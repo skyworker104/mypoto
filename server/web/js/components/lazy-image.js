@@ -1,10 +1,12 @@
 /**
  * Lazy image loading with authenticated fetch + IntersectionObserver.
  * Uses fetch() + Blob URL to add Authorization header to image requests.
+ * Includes offscreen unloading to limit memory usage on large timelines.
  */
 import { getState } from '../store.js';
 
 let _observer = null;
+let _unloadObserver = null;
 
 function _getObserver() {
   if (_observer) return _observer;
@@ -15,6 +17,8 @@ function _getObserver() {
         const img = entry.target;
         _loadImage(img);
         _observer.unobserve(img);
+        // Start watching for offscreen unloading
+        _getUnloadObserver().observe(img);
       }
     }
   }, {
@@ -23,6 +27,32 @@ function _getObserver() {
   });
 
   return _observer;
+}
+
+function _getUnloadObserver() {
+  if (_unloadObserver) return _unloadObserver;
+
+  _unloadObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) {
+        const img = entry.target;
+        // Revoke blob URL to free memory
+        if (img.src && img.src.startsWith('blob:')) {
+          URL.revokeObjectURL(img.src);
+          img.src = '';
+          img.classList.remove('lazy-loaded');
+          // Re-observe for lazy loading when it comes back into view
+          _unloadObserver.unobserve(img);
+          _getObserver().observe(img);
+        }
+      }
+    }
+  }, {
+    rootMargin: '2000px 0px', // unload when 2000px offscreen
+    threshold: 0,
+  });
+
+  return _unloadObserver;
 }
 
 async function _loadImage(img) {

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:go_router/go_router.dart';
 import 'package:photo_manager/photo_manager.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/connectivity_provider.dart';
 import '../../providers/settings_provider.dart';
 
 /// Settings screen for selecting backup folders and viewing backup stats.
@@ -231,6 +234,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _buildServerStorageCard(theme),
                 ],
 
+                // Server connection settings
+                const Divider(),
+                _buildServerConnectionSection(theme),
+
                 const SizedBox(height: 32),
               ],
             ),
@@ -269,6 +276,115 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildServerConnectionSection(ThemeData theme) {
+    final connectivity = ref.watch(connectivityProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ListTile(
+          leading: Icon(
+            connectivity.isServerReachable ? Icons.wifi : Icons.wifi_off,
+            color: connectivity.isServerReachable ? Colors.green : Colors.orange,
+          ),
+          title: const Text('서버 연결 상태'),
+          subtitle: Text(
+            connectivity.isServerReachable
+                ? '연결됨'
+                : connectivity.isWiFi
+                    ? '서버와 같은 WiFi 존이 아닙니다'
+                    : 'WiFi에 연결되어 있지 않습니다',
+          ),
+          trailing: TextButton(
+            onPressed: () {
+              ref.read(connectivityProvider.notifier).checkNow();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('서버 연결 확인 중...')),
+              );
+            },
+            child: const Text('재연결'),
+          ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.swap_horiz),
+          title: const Text('서버 재설정'),
+          subtitle: const Text('다른 서버에 연결하거나 IP를 변경합니다'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _showReconnectDialog(),
+        ),
+      ],
+    );
+  }
+
+  void _showReconnectDialog() {
+    final controller = TextEditingController();
+    final api = ref.read(apiClientProvider);
+    final currentUrl = (api.baseUrl ?? '').replaceAll('/api/v1', '');
+    controller.text = currentUrl.replaceAll('http://', '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('서버 재설정'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('서버 IP를 입력하세요.\n포트는 자동으로 8080이 적용됩니다.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: '서버 IP',
+                hintText: '예: 192.168.0.10',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.url,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              var input = controller.text.trim();
+              if (input.isEmpty) return;
+
+              // Strip protocol/port if user typed full URL
+              input = input
+                  .replaceAll('http://', '')
+                  .replaceAll('https://', '');
+              if (input.contains(':')) {
+                input = input.split(':').first;
+              }
+              if (input.contains('/')) {
+                input = input.split('/').first;
+              }
+
+              final newUrl = 'http://$input:8080';
+              await ref
+                  .read(connectivityProvider.notifier)
+                  .reconnect(newUrl);
+
+              // Update stored base URL
+              const storage = FlutterSecureStorage();
+              await storage.write(key: 'base_url', value: '$newUrl/api/v1');
+
+              if (mounted) {
+                // Force full restart by navigating to discover
+                context.go('/discover');
+              }
+            },
+            child: const Text('연결'),
+          ),
+        ],
       ),
     );
   }

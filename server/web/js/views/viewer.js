@@ -4,7 +4,7 @@
 import { apiJson, apiPatch, apiDelete, fetchImageUrl } from '../api.js';
 import { navigate } from '../router.js';
 import { getState, setState } from '../store.js';
-import { formatDateKo, formatBytes, el } from '../utils.js';
+import { formatDateKo, formatDateTimeKo, formatBytes, el } from '../utils.js';
 import { showToast } from '../components/toast.js';
 
 let _el;
@@ -206,7 +206,7 @@ function _renderInfoPanel() {
   // --- Basic Info ---
   const basicItems = [];
   if (_photo.taken_at) {
-    basicItems.push(_infoItem('calendar_today', '촬영일', formatDateKo(_photo.taken_at)));
+    basicItems.push(_infoItem('calendar_today', '촬영일', formatDateTimeKo(_photo.taken_at)));
   }
   if (_photo.width && _photo.height) {
     basicItems.push(_infoItem('aspect_ratio', '해상도', `${_photo.width} x ${_photo.height}`));
@@ -299,7 +299,7 @@ function _renderInfoPanel() {
     uploadItems.push(_infoItem('person', '업로드', _photo.uploaded_by));
   }
   if (_photo.created_at) {
-    uploadItems.push(_infoItem('cloud_upload', '업로드 일시', formatDateKo(_photo.created_at)));
+    uploadItems.push(_infoItem('cloud_upload', '업로드 일시', formatDateTimeKo(_photo.created_at)));
   }
   if (uploadItems.length) {
     content.appendChild(_infoSection('업로드', uploadItems));
