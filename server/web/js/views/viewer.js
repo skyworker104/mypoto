@@ -233,10 +233,14 @@ function _renderInfoPanel() {
   if (_photo.exif_data) {
     try {
       const exif = JSON.parse(_photo.exif_data);
-      if (exif.focal_length) camItems.push(_infoItem('center_focus_strong', '초점 거리', `${exif.focal_length}mm`));
-      if (exif.f_number) camItems.push(_infoItem('camera', '조리개', `f/${exif.f_number}`));
-      if (exif.exposure_time) camItems.push(_infoItem('shutter_speed', '셔터 속도', exif.exposure_time));
-      if (exif.iso) camItems.push(_infoItem('iso', 'ISO', `${exif.iso}`));
+      const fl = exif.FocalLength || exif.focal_length;
+      const fn = exif.FNumber || exif.f_number;
+      const et = exif.ExposureTime || exif.exposure_time;
+      const iso = exif.ISOSpeedRatings || exif.iso;
+      if (fl) camItems.push(_infoItem('center_focus_strong', '초점 거리', `${fl}mm`));
+      if (fn) camItems.push(_infoItem('camera', '조리개', `f/${fn}`));
+      if (et) camItems.push(_infoItem('shutter_speed', '셔터 속도', typeof et === 'number' ? (et < 1 ? `1/${Math.round(1/et)}` : `${et}`) : `${et}`));
+      if (iso) camItems.push(_infoItem('iso', 'ISO', `${iso}`));
     } catch (e) { /* ignore parse errors */ }
   }
   if (camItems.length) {
@@ -254,7 +258,7 @@ function _renderInfoPanel() {
   }
 
   // --- Location ---
-  if (_photo.latitude && _photo.longitude) {
+  if (_photo.latitude != null && _photo.longitude != null) {
     const locItems = [];
     if (_photo.location_name) {
       locItems.push(_infoItem('place', '장소', _photo.location_name));

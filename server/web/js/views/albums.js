@@ -1,7 +1,7 @@
 /**
  * Albums view - full CRUD: create, rename, delete, add/remove photos.
  */
-import { apiJson, apiPost, apiPatch, apiDelete } from '../api.js';
+import { apiJson, apiPost, apiPatch, apiDelete, fetchImageUrl } from '../api.js';
 import { navigate } from '../router.js';
 import { el } from '../utils.js';
 import { observeImages } from '../components/lazy-image.js';
@@ -164,29 +164,77 @@ function _renderAlbumPhotos() {
     return;
   }
 
-  for (const p of _detailPhotos) {
-    const thumb = el('div', {
-      className: 'photo-thumb',
-      'data-id': p.id,
-    }, [
-      el('img', { 'data-src': `/api/v1/photos/${p.id}/thumb`, className: 'lazy-img', alt: '' }),
-      el('span', { className: 'thumb-check material-symbols-outlined', textContent: 'check_circle' }),
-    ]);
+  // Use justified layout like timeline
+  const containerWidth = grid.clientWidth || window.innerWidth;
+  const rows = _justifiedLayout(_detailPhotos, containerWidth);
 
-    thumb.addEventListener('click', () => {
-      if (_selectMode) _toggleSelect(p.id);
-      else navigate(`/viewer/${p.id}`);
-    });
+  for (const row of rows) {
+    const rowEl = el('div', { className: 'photo-row' });
+    for (const item of row) {
+      const p = item.photo;
+      const thumb = el('div', {
+        className: 'photo-thumb',
+        'data-id': p.id,
+        style: { width: `${item.width}px`, height: `${item.height}px` },
+      }, [
+        el('img', { 'data-src': `/api/v1/photos/${p.id}/thumb`, className: 'lazy-img', alt: '' }),
+        el('span', { className: 'thumb-check material-symbols-outlined', textContent: 'check_circle' }),
+        ...(p.is_video ? [
+          el('span', { className: 'thumb-video material-symbols-outlined', textContent: 'play_circle' }),
+        ] : []),
+      ]);
 
-    thumb.addEventListener('pointerdown', () => {
-      _longPressTimer = setTimeout(() => _enterSelectMode(p.id), 500);
-    });
-    thumb.addEventListener('pointerup', () => clearTimeout(_longPressTimer));
-    thumb.addEventListener('pointerleave', () => clearTimeout(_longPressTimer));
+      thumb.addEventListener('click', () => {
+        if (_selectMode) _toggleSelect(p.id);
+        else navigate(`/viewer/${p.id}`);
+      });
 
-    grid.appendChild(thumb);
+      thumb.addEventListener('pointerdown', () => {
+        _longPressTimer = setTimeout(() => _enterSelectMode(p.id), 500);
+      });
+      thumb.addEventListener('pointerup', () => clearTimeout(_longPressTimer));
+      thumb.addEventListener('pointerleave', () => clearTimeout(_longPressTimer));
+
+      rowEl.appendChild(thumb);
+    }
+    grid.appendChild(rowEl);
   }
   observeImages(grid);
+}
+
+function _justifiedLayout(photos, containerWidth) {
+  const gap = 4;
+  const w = window.innerWidth;
+  const targetH = w >= 1200 ? 240 : w >= 768 ? 200 : 160;
+  const rows = [];
+  let row = [];
+  let rowWidth = 0;
+
+  for (const p of photos) {
+    const aspect = (p.width && p.height) ? p.width / p.height : 1.33;
+    const itemWidth = targetH * aspect;
+    row.push({ photo: p, aspect, width: itemWidth, height: targetH });
+    rowWidth += itemWidth + gap;
+
+    if (rowWidth - gap >= containerWidth) {
+      const scale = (containerWidth - gap * (row.length - 1)) / (rowWidth - gap * row.length);
+      for (const item of row) {
+        item.width = Math.floor(item.width * scale);
+        item.height = Math.floor(targetH * scale);
+      }
+      rows.push(row);
+      row = [];
+      rowWidth = 0;
+    }
+  }
+  if (row.length) {
+    for (const item of row) {
+      item.height = targetH;
+      item.width = Math.floor(targetH * item.aspect);
+    }
+    rows.push(row);
+  }
+  return rows;
 }
 
 function _showList() {

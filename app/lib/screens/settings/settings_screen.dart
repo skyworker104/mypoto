@@ -225,7 +225,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   title: const Text('백업 로그'),
                   subtitle: const Text('업로드 성공/실패 상세 기록'),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.pushNamed(context, '/backup-log'),
+                  onTap: () => context.push('/backup-log'),
                 ),
 
                 // Server storage info

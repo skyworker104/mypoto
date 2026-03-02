@@ -158,6 +158,95 @@
   font-weight: 500;
 }
 
+/* Section header - clickable for date group select */
+.section-header:hover {
+  color: var(--color-primary);
+}
+
+/* Album picker modal */
+.album-picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.album-picker-modal {
+  background: var(--color-bg);
+  border-radius: var(--radius-lg);
+  width: 90%;
+  max-width: 400px;
+  max-height: 70vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+}
+
+.album-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 16px 8px;
+  position: sticky;
+  top: 0;
+  background: var(--color-bg);
+  z-index: 1;
+}
+
+.album-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.album-picker-item:hover {
+  background: var(--color-surface-variant);
+}
+
+.album-picker-cover {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-surface-variant);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.album-picker-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.album-picker-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.album-picker-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.album-picker-count {
+  font-size: var(--font-size-sm);
+  color: var(--color-on-surface-variant);
+}
+
+.album-picker-new {
+  border-bottom: 1px solid var(--color-border);
+}
+
 /* Login page */
 .login-page {
   display: flex;

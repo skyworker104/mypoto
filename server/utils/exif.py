@@ -36,13 +36,27 @@ def extract_exif(image_data: bytes) -> dict[str, Any]:
     decoded: dict[str, Any] = {}
     for tag_id, value in exif_data.items():
         tag_name = TAGS.get(tag_id, str(tag_id))
-        # Convert bytes/non-serializable to string
         if isinstance(value, bytes):
             try:
                 value = value.decode("utf-8", errors="replace")
             except Exception:
                 value = str(value)
         decoded[tag_name] = value
+
+    # Also read ExifIFD (0x8769) for DateTimeOriginal, FocalLength, etc.
+    try:
+        exif_ifd = exif_data.get_ifd(0x8769)
+        if exif_ifd:
+            for tag_id, value in exif_ifd.items():
+                tag_name = TAGS.get(tag_id, str(tag_id))
+                if isinstance(value, bytes):
+                    try:
+                        value = value.decode("utf-8", errors="replace")
+                    except Exception:
+                        value = str(value)
+                decoded[tag_name] = value
+    except Exception:
+        pass
 
     # Camera info
     result["camera_make"] = _str_or_none(decoded.get("Make"))

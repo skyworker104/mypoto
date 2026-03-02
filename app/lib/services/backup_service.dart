@@ -131,7 +131,10 @@ class BackupService {
       // Compute hashes for batch
       final hashMap = <String, AssetEntity>{};
       for (final asset in batch) {
-        final file = await asset.file;
+        // Use originFile for videos (asset.file may return null on iOS)
+        final file = asset.type == AssetType.video
+            ? await asset.originFile
+            : await asset.file;
         if (file == null) continue;
         final bytes = await file.readAsBytes();
         final hash = sha256.convert(bytes).toString();
@@ -154,11 +157,13 @@ class BackupService {
         for (final hash in newHashes) {
           if (_cancelled) break;
           final asset = hashMap[hash]!;
-          final file = await asset.file;
+          final file = asset.type == AssetType.video
+              ? await asset.originFile
+              : await asset.file;
           if (file == null) continue;
 
           final isVideo = asset.type == AssetType.video;
-          final filename = asset.title ?? (isVideo ? 'video' : 'photo');
+          final filename = asset.title ?? (isVideo ? 'video.mp4' : 'photo.jpg');
 
           _emit(BackupProgress(
             state: BackupState.uploading,
@@ -257,7 +262,9 @@ class BackupService {
 
       final hashMap = <String, AssetEntity>{};
       for (final asset in batch) {
-        final file = await asset.file;
+        final file = asset.type == AssetType.video
+            ? await asset.originFile
+            : await asset.file;
         if (file == null) continue;
         final bytes = await file.readAsBytes();
         final hash = sha256.convert(bytes).toString();
@@ -277,10 +284,12 @@ class BackupService {
         for (final hash in newHashes) {
           if (_cancelled) break;
           final asset = hashMap[hash]!;
-          final file = await asset.file;
+          final file = asset.type == AssetType.video
+              ? await asset.originFile
+              : await asset.file;
           if (file == null) continue;
 
-          final filename = asset.title ?? (asset.type == AssetType.video ? 'video' : 'photo');
+          final filename = asset.title ?? (asset.type == AssetType.video ? 'video.mp4' : 'photo.jpg');
 
           _emit(BackupProgress(
             state: BackupState.uploading,

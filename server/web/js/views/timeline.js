@@ -150,6 +150,32 @@ function _updateSelectCount() {
   _el.querySelector('#tl-select-count').textContent = `${_selected.size}장 선택`;
 }
 
+function _selectDateGroup(date) {
+  const section = _gridContainer.querySelector(`[data-date="${date}"]`);
+  if (!section) return;
+  const thumbs = section.querySelectorAll('.photo-thumb[data-id]');
+  if (!thumbs.length) return;
+
+  if (!_selectMode) {
+    _enterSelectMode(null);
+  }
+
+  // Check if all photos in this date group are already selected
+  const ids = [...thumbs].map(t => t.dataset.id);
+  const allSelected = ids.every(id => _selected.has(id));
+
+  for (const id of ids) {
+    if (allSelected) {
+      _selected.delete(id);
+    } else {
+      _selected.add(id);
+    }
+    const thumb = _gridContainer.querySelector(`[data-id="${id}"]`);
+    if (thumb) thumb.classList.toggle('selected', _selected.has(id));
+  }
+  _updateSelectCount();
+}
+
 async function _batchDelete() {
   if (!_selected.size) return;
   if (!confirm(`${_selected.size}장의 사진을 삭제할까요?`)) return;
@@ -176,40 +202,86 @@ async function _batchFavorite() {
 
 async function _addToAlbum() {
   if (!_selected.size) return;
-  // Load album list and let user pick
   try {
     const data = await apiJson('/albums');
     const albums = data.albums || data || [];
-    if (!albums.length) {
-      const name = prompt('새 앨범 이름을 입력하세요:');
-      if (!name?.trim()) return;
-      const newAlbum = await apiPost('/albums', { name: name.trim() });
-      await apiPost(`/albums/${newAlbum.id}/photos`, { photo_ids: [..._selected] });
-      showToast(`'${name.trim()}' 앨범에 추가됨`, { type: 'success' });
-    } else {
-      // Simple selection via prompt
-      const choices = albums.map((a, i) => `${i + 1}. ${a.name}`).join('\n');
-      const input = prompt(`앨범을 선택하세요:\n${choices}\n\n번호 입력 (새 앨범: 0):`);
-      if (input === null) return;
-      const idx = parseInt(input);
-      let albumId;
-      if (idx === 0) {
-        const name = prompt('새 앨범 이름:');
-        if (!name?.trim()) return;
-        const newAlbum = await apiPost('/albums', { name: name.trim() });
-        albumId = newAlbum.id;
-      } else if (idx > 0 && idx <= albums.length) {
-        albumId = albums[idx - 1].id;
-      } else {
-        return;
-      }
-      await apiPost(`/albums/${albumId}/photos`, { photo_ids: [..._selected] });
-      showToast('앨범에 추가됨', { type: 'success' });
-    }
-    _exitSelectMode();
+    _showAlbumPickerModal(albums, [..._selected]);
   } catch (e) {
-    showToast('앨범 추가 실패', { type: 'error' });
+    showToast('앨범 목록 로드 실패', { type: 'error' });
   }
+}
+
+function _showAlbumPickerModal(albums, photoIds) {
+  // Remove existing modal if any
+  document.querySelector('.album-picker-overlay')?.remove();
+
+  const overlay = el('div', { className: 'album-picker-overlay' });
+  const modal = el('div', { className: 'album-picker-modal' });
+
+  // Header
+  modal.appendChild(el('div', { className: 'album-picker-header' }, [
+    el('span', { textContent: '앨범 선택', style: { fontWeight: '600', fontSize: '18px' } }),
+    el('button', {
+      className: 'btn-icon',
+      onClick: () => overlay.remove(),
+    }, [el('span', { className: 'material-symbols-outlined', textContent: 'close' })]),
+  ]));
+
+  // Create new album button
+  const newBtn = el('div', { className: 'album-picker-item album-picker-new' }, [
+    el('div', { className: 'album-picker-cover' }, [
+      el('span', { className: 'material-symbols-outlined', textContent: 'add', style: { fontSize: '32px', color: 'var(--color-primary)' } }),
+    ]),
+    el('div', { className: 'album-picker-info' }, [
+      el('div', { className: 'album-picker-name', textContent: '새 앨범 만들기', style: { color: 'var(--color-primary)' } }),
+    ]),
+  ]);
+  newBtn.addEventListener('click', async () => {
+    const name = prompt('새 앨범 이름을 입력하세요:');
+    if (!name?.trim()) return;
+    try {
+      const newAlbum = await apiPost('/albums', { name: name.trim() });
+      await apiPost(`/albums/${newAlbum.id}/photos`, { photo_ids: photoIds });
+      showToast(`'${name.trim()}' 앨범에 ${photoIds.length}장 추가됨`, { type: 'success' });
+      overlay.remove();
+      _exitSelectMode();
+    } catch (e) {
+      showToast('실패', { type: 'error' });
+    }
+  });
+  modal.appendChild(newBtn);
+
+  // Album list
+  for (const album of albums) {
+    const item = el('div', { className: 'album-picker-item' }, [
+      el('div', { className: 'album-picker-cover' }, [
+        album.cover_photo
+          ? el('img', { src: `/api/v1/photos/${album.cover_photo}/thumb`, alt: '' })
+          : el('span', { className: 'material-symbols-outlined', textContent: 'photo_album', style: { fontSize: '32px', color: 'var(--color-on-surface-variant)' } }),
+      ]),
+      el('div', { className: 'album-picker-info' }, [
+        el('div', { className: 'album-picker-name', textContent: album.name }),
+        el('div', { className: 'album-picker-count', textContent: `${album.photo_count || 0}장` }),
+      ]),
+    ]);
+    item.addEventListener('click', async () => {
+      try {
+        await apiPost(`/albums/${album.id}/photos`, { photo_ids: photoIds });
+        showToast(`'${album.name}' 앨범에 ${photoIds.length}장 추가됨`, { type: 'success' });
+        overlay.remove();
+        _exitSelectMode();
+      } catch (e) {
+        showToast('추가 실패', { type: 'error' });
+      }
+    });
+    modal.appendChild(item);
+  }
+
+  overlay.appendChild(modal);
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.remove();
+  });
+  document.body.appendChild(overlay);
 }
 
 // --- Data Loading ---
@@ -256,7 +328,10 @@ function _renderGroups(newPhotos) {
       _appendPhotosToGrid(grid, group.photos);
     } else {
       const section = el('div', { className: 'timeline-section', 'data-date': group.date });
-      section.appendChild(el('div', { className: 'section-header', textContent: group.label }));
+      const header = el('div', { className: 'section-header', textContent: group.label });
+      header.style.cursor = 'pointer';
+      header.addEventListener('click', () => _selectDateGroup(group.date));
+      section.appendChild(header);
       const grid = el('div', { className: 'photo-grid' });
       _appendPhotosToGrid(grid, group.photos);
       section.appendChild(grid);
