@@ -4,19 +4,22 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:photo_manager/photo_manager.dart';
 import '../models/photo.dart';
+import 'justified_layout.dart';
 
 /// Sync status for photo tiles.
 enum SyncStatus { synced, pending, serverOnly, unknown }
 
-/// Date-grouped photo grid with infinite scroll support.
-/// Supports both server photos (Photo model) and local photos (AssetEntity).
+// ---------------------------------------------------------------------------
+// PhotoGrid — server photos with justified layout
+// ---------------------------------------------------------------------------
+
+/// Date-grouped photo grid with Google Photos-style justified layout.
 class PhotoGrid extends StatefulWidget {
   final List<Photo> photos;
   final void Function(Photo photo) onPhotoTap;
   final VoidCallback onLoadMore;
   final bool isLoadingMore;
   final bool hasMore;
-  final int columns;
   final Map<String, String>? httpHeaders;
   final Map<String, SyncStatus>? syncStatusMap;
 
@@ -27,7 +30,6 @@ class PhotoGrid extends StatefulWidget {
     required this.onLoadMore,
     this.isLoadingMore = false,
     this.hasMore = true,
-    this.columns = 4,
     this.httpHeaders,
     this.syncStatusMap,
   });
@@ -38,6 +40,9 @@ class PhotoGrid extends StatefulWidget {
 
 class _PhotoGridState extends State<PhotoGrid> {
   final _scrollController = ScrollController();
+  double? _lastWidth;
+  int? _lastPhotoCount;
+  Map<String, List<JustifiedRow<Photo>>>? _cachedLayout;
 
   @override
   void initState() {
@@ -58,7 +63,14 @@ class _PhotoGridState extends State<PhotoGrid> {
     super.dispose();
   }
 
-  /// Group photos by date.
+  @override
+  void didUpdateWidget(covariant PhotoGrid oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.photos.length != widget.photos.length) {
+      _cachedLayout = null;
+    }
+  }
+
   Map<String, List<Photo>> _groupByDate() {
     final groups = <String, List<Photo>>{};
     for (final photo in widget.photos) {
@@ -68,79 +80,143 @@ class _PhotoGridState extends State<PhotoGrid> {
     return groups;
   }
 
+  Map<String, List<JustifiedRow<Photo>>> _computeLayout(
+      Map<String, List<Photo>> groups, double containerWidth) {
+    final targetHeight = getTargetRowHeight(containerWidth);
+    final result = <String, List<JustifiedRow<Photo>>>{};
+
+    for (final entry in groups.entries) {
+      final items = entry.value.map((photo) {
+        final w = photo.width ?? 4;
+        final h = photo.height ?? 3;
+        final aspect = (w > 0 && h > 0) ? w / h : 4.0 / 3.0;
+        return JustifiedItem(data: photo, aspect: aspect);
+      }).toList();
+
+      result[entry.key] = computeJustifiedLayout(
+        items: items,
+        containerWidth: containerWidth,
+        targetRowHeight: targetHeight,
+      );
+    }
+    return result;
+  }
+
   @override
   Widget build(BuildContext context) {
     final groups = _groupByDate();
     final dates = groups.keys.toList();
 
-    return CustomScrollView(
-      controller: _scrollController,
-      slivers: [
-        for (final date in dates) ...[
-          // Date header
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-            sliver: SliverToBoxAdapter(
-              child: Text(
-                _formatDateHeader(date),
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-            ),
-          ),
-          // Photo grid for this date
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 2),
-            sliver: SliverGrid(
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: widget.columns,
-                mainAxisSpacing: 2,
-                crossAxisSpacing: 2,
-              ),
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final photo = groups[date]![index];
-                  final syncStatus = widget.syncStatusMap?[photo.id];
-                  return _PhotoTile(
-                    photo: photo,
-                    onTap: () => widget.onPhotoTap(photo),
-                    httpHeaders: widget.httpHeaders,
-                    syncStatus: syncStatus,
-                  );
-                },
-                childCount: groups[date]!.length,
-              ),
-            ),
-          ),
-        ],
-        // Loading indicator or end-of-list
-        if (widget.isLoadingMore)
-          const SliverPadding(
-            padding: EdgeInsets.all(16),
-            sliver: SliverToBoxAdapter(
-              child: Center(child: CircularProgressIndicator()),
-            ),
-          )
-        else if (!widget.hasMore && widget.photos.isNotEmpty)
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(vertical: 24),
-            sliver: SliverToBoxAdapter(
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(Icons.check_circle_outline,
-                        size: 32, color: Colors.grey[400]),
-                    const SizedBox(height: 8),
-                    Text('모든 사진을 불러왔습니다',
-                        style: TextStyle(
-                            color: Colors.grey[500], fontSize: 13)),
-                  ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final containerWidth = constraints.maxWidth - 4; // 2px padding each side
+
+        if (_lastWidth != containerWidth ||
+            _lastPhotoCount != widget.photos.length ||
+            _cachedLayout == null) {
+          _lastWidth = containerWidth;
+          _lastPhotoCount = widget.photos.length;
+          _cachedLayout = _computeLayout(groups, containerWidth);
+        }
+
+        return CustomScrollView(
+          controller: _scrollController,
+          slivers: [
+            for (final date in dates) ...[
+              // Date header
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                sliver: SliverToBoxAdapter(
+                  child: Text(
+                    _formatDateHeader(date),
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
                 ),
               ),
-            ),
-          ),
-      ],
+              // Justified rows
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final row = _cachedLayout![date]![index];
+                      return _buildJustifiedRow(row);
+                    },
+                    childCount: _cachedLayout![date]?.length ?? 0,
+                  ),
+                ),
+              ),
+            ],
+            // Loading indicator or end-of-list
+            if (widget.isLoadingMore)
+              const SliverPadding(
+                padding: EdgeInsets.all(16),
+                sliver: SliverToBoxAdapter(
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              )
+            else if (!widget.hasMore && widget.photos.isNotEmpty)
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                sliver: SliverToBoxAdapter(
+                  child: Center(
+                    child: Column(
+                      children: [
+                        Icon(Icons.check_circle_outline,
+                            size: 32, color: Colors.grey[400]),
+                        const SizedBox(height: 8),
+                        Text('모든 사진을 불러왔습니다',
+                            style: TextStyle(
+                                color: Colors.grey[500], fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildJustifiedRow(JustifiedRow<Photo> row) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        children: [
+          for (var i = 0; i < row.items.length; i++) ...[
+            if (i > 0) const SizedBox(width: 2),
+            if (i == row.items.length - 1)
+              // Last item: Expanded to absorb sub-pixel rounding
+              Expanded(
+                child: SizedBox(
+                  height: row.height.floorToDouble(),
+                  child: _PhotoTile(
+                    photo: row.items[i].data,
+                    onTap: () => widget.onPhotoTap(row.items[i].data),
+                    httpHeaders: widget.httpHeaders,
+                    syncStatus:
+                        widget.syncStatusMap?[row.items[i].data.id],
+                  ),
+                ),
+              )
+            else
+              SizedBox(
+                width: (row.items[i].aspect * row.height).floorToDouble(),
+                height: row.height.floorToDouble(),
+                child: _PhotoTile(
+                  photo: row.items[i].data,
+                  onTap: () => widget.onPhotoTap(row.items[i].data),
+                  httpHeaders: widget.httpHeaders,
+                  syncStatus:
+                      widget.syncStatusMap?[row.items[i].data.id],
+                ),
+              ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -218,7 +294,8 @@ class _PhotoTile extends StatelessWidget {
       case SyncStatus.synced:
         return const Icon(Icons.cloud_done, size: 14, color: Colors.white70);
       case SyncStatus.pending:
-        return const Icon(Icons.cloud_upload, size: 14, color: Colors.orangeAccent);
+        return const Icon(Icons.cloud_upload,
+            size: 14, color: Colors.orangeAccent);
       case SyncStatus.serverOnly:
         return const Icon(Icons.cloud, size: 14, color: Colors.lightBlue);
       case SyncStatus.unknown:
@@ -227,14 +304,17 @@ class _PhotoTile extends StatelessWidget {
   }
 }
 
-/// Local photo grid for offline mode (displays AssetEntity thumbnails).
+// ---------------------------------------------------------------------------
+// LocalPhotoGrid — device photos with justified layout
+// ---------------------------------------------------------------------------
+
+/// Local photo grid for offline mode with Google Photos-style justified layout.
 class LocalPhotoGrid extends StatefulWidget {
   final List<AssetEntity> photos;
   final void Function(AssetEntity asset)? onPhotoTap;
   final VoidCallback onLoadMore;
   final bool isLoadingMore;
   final bool hasMore;
-  final int columns;
   final bool Function(String assetId)? isAssetSynced;
 
   const LocalPhotoGrid({
@@ -244,7 +324,6 @@ class LocalPhotoGrid extends StatefulWidget {
     required this.onLoadMore,
     this.isLoadingMore = false,
     this.hasMore = true,
-    this.columns = 4,
     this.isAssetSynced,
   });
 
@@ -254,6 +333,9 @@ class LocalPhotoGrid extends StatefulWidget {
 
 class _LocalPhotoGridState extends State<LocalPhotoGrid> {
   final _scrollController = ScrollController();
+  double? _lastWidth;
+  int? _lastPhotoCount;
+  Map<String, List<JustifiedRow<AssetEntity>>>? _cachedLayout;
 
   @override
   void initState() {
@@ -274,15 +356,43 @@ class _LocalPhotoGridState extends State<LocalPhotoGrid> {
     super.dispose();
   }
 
-  /// Group photos by date.
+  @override
+  void didUpdateWidget(covariant LocalPhotoGrid oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.photos.length != widget.photos.length) {
+      _cachedLayout = null;
+    }
+  }
+
   Map<String, List<AssetEntity>> _groupByDate() {
     final groups = <String, List<AssetEntity>>{};
     for (final asset in widget.photos) {
-      final date = DateFormat('yyyy-MM-dd')
-          .format(asset.createDateTime);
+      final date = DateFormat('yyyy-MM-dd').format(asset.createDateTime);
       groups.putIfAbsent(date, () => []).add(asset);
     }
     return groups;
+  }
+
+  Map<String, List<JustifiedRow<AssetEntity>>> _computeLayout(
+      Map<String, List<AssetEntity>> groups, double containerWidth) {
+    final targetHeight = getTargetRowHeight(containerWidth);
+    final result = <String, List<JustifiedRow<AssetEntity>>>{};
+
+    for (final entry in groups.entries) {
+      final items = entry.value.map((asset) {
+        final w = asset.width;
+        final h = asset.height;
+        final aspect = (w > 0 && h > 0) ? w / h : 4.0 / 3.0;
+        return JustifiedItem(data: asset, aspect: aspect);
+      }).toList();
+
+      result[entry.key] = computeJustifiedLayout(
+        items: items,
+        containerWidth: containerWidth,
+        targetRowHeight: targetHeight,
+      );
+    }
+    return result;
   }
 
   @override
@@ -290,72 +400,127 @@ class _LocalPhotoGridState extends State<LocalPhotoGrid> {
     final groups = _groupByDate();
     final dates = groups.keys.toList();
 
-    return CustomScrollView(
-      controller: _scrollController,
-      slivers: [
-        for (final date in dates) ...[
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-            sliver: SliverToBoxAdapter(
-              child: Text(
-                _formatDateHeader(date),
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-            ),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 2),
-            sliver: SliverGrid(
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: widget.columns,
-                mainAxisSpacing: 2,
-                crossAxisSpacing: 2,
-              ),
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final asset = groups[date]![index];
-                  final synced = widget.isAssetSynced?.call(asset.id) ?? false;
-                  return _LocalPhotoTile(
-                    asset: asset,
-                    onTap: widget.onPhotoTap != null
-                        ? () => widget.onPhotoTap!(asset)
-                        : null,
-                    isSynced: synced,
-                  );
-                },
-                childCount: groups[date]!.length,
-              ),
-            ),
-          ),
-        ],
-        if (widget.isLoadingMore)
-          const SliverPadding(
-            padding: EdgeInsets.all(16),
-            sliver: SliverToBoxAdapter(
-              child: Center(child: CircularProgressIndicator()),
-            ),
-          )
-        else if (!widget.hasMore && widget.photos.isNotEmpty)
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(vertical: 24),
-            sliver: SliverToBoxAdapter(
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(Icons.check_circle_outline,
-                        size: 32, color: Colors.grey[400]),
-                    const SizedBox(height: 8),
-                    Text('모든 사진을 불러왔습니다',
-                        style: TextStyle(
-                            color: Colors.grey[500], fontSize: 13)),
-                  ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final containerWidth = constraints.maxWidth - 4;
+
+        if (_lastWidth != containerWidth ||
+            _lastPhotoCount != widget.photos.length ||
+            _cachedLayout == null) {
+          _lastWidth = containerWidth;
+          _lastPhotoCount = widget.photos.length;
+          _cachedLayout = _computeLayout(groups, containerWidth);
+        }
+
+        return CustomScrollView(
+          controller: _scrollController,
+          slivers: [
+            for (final date in dates) ...[
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                sliver: SliverToBoxAdapter(
+                  child: Text(
+                    _formatDateHeader(date),
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
                 ),
               ),
-            ),
-          ),
-      ],
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final row = _cachedLayout![date]![index];
+                      return _buildJustifiedRow(row);
+                    },
+                    childCount: _cachedLayout![date]?.length ?? 0,
+                  ),
+                ),
+              ),
+            ],
+            if (widget.isLoadingMore)
+              const SliverPadding(
+                padding: EdgeInsets.all(16),
+                sliver: SliverToBoxAdapter(
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              )
+            else if (!widget.hasMore && widget.photos.isNotEmpty)
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                sliver: SliverToBoxAdapter(
+                  child: Center(
+                    child: Column(
+                      children: [
+                        Icon(Icons.check_circle_outline,
+                            size: 32, color: Colors.grey[400]),
+                        const SizedBox(height: 8),
+                        Text('모든 사진을 불러왔습니다',
+                            style: TextStyle(
+                                color: Colors.grey[500], fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildJustifiedRow(JustifiedRow<AssetEntity> row) {
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        children: [
+          for (var i = 0; i < row.items.length; i++) ...[
+            if (i > 0) const SizedBox(width: 2),
+            if (i == row.items.length - 1)
+              Expanded(
+                child: SizedBox(
+                  height: row.height.floorToDouble(),
+                  child: _LocalPhotoTile(
+                    asset: row.items[i].data,
+                    onTap: widget.onPhotoTap != null
+                        ? () => widget.onPhotoTap!(row.items[i].data)
+                        : null,
+                    isSynced:
+                        widget.isAssetSynced?.call(row.items[i].data.id) ??
+                            false,
+                    thumbWidth:
+                        (row.items[i].aspect * row.height * dpr).toInt().clamp(100, 600),
+                    thumbHeight:
+                        (row.height * dpr).toInt().clamp(100, 600),
+                  ),
+                ),
+              )
+            else
+              SizedBox(
+                width:
+                    (row.items[i].aspect * row.height).floorToDouble(),
+                height: row.height.floorToDouble(),
+                child: _LocalPhotoTile(
+                  asset: row.items[i].data,
+                  onTap: widget.onPhotoTap != null
+                      ? () => widget.onPhotoTap!(row.items[i].data)
+                      : null,
+                  isSynced:
+                      widget.isAssetSynced?.call(row.items[i].data.id) ??
+                          false,
+                  thumbWidth:
+                      (row.items[i].aspect * row.height * dpr).toInt().clamp(100, 600),
+                  thumbHeight:
+                      (row.height * dpr).toInt().clamp(100, 600),
+                ),
+              ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -377,11 +542,15 @@ class _LocalPhotoTile extends StatelessWidget {
   final AssetEntity asset;
   final VoidCallback? onTap;
   final bool isSynced;
+  final int thumbWidth;
+  final int thumbHeight;
 
   const _LocalPhotoTile({
     required this.asset,
     this.onTap,
     this.isSynced = false,
+    this.thumbWidth = 200,
+    this.thumbHeight = 200,
   });
 
   @override
@@ -393,7 +562,7 @@ class _LocalPhotoTile extends StatelessWidget {
         children: [
           FutureBuilder<Uint8List?>(
             future: asset.thumbnailDataWithSize(
-              const ThumbnailSize(200, 200),
+              ThumbnailSize(thumbWidth, thumbHeight),
               quality: 80,
             ),
             builder: (context, snapshot) {

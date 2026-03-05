@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http_parser/http_parser.dart';
+import 'package:mime/mime.dart';
 import '../config/app_config.dart';
 
 /// HTTP client with JWT auto-attach and token refresh.
@@ -156,9 +158,12 @@ class ApiClient {
       {required File file,
       Map<String, dynamic>? fields,
       void Function(int, int)? onProgress}) async {
+    final filename = file.path.split('/').last;
+    final mimeStr = lookupMimeType(filename) ?? 'application/octet-stream';
     final formData = FormData.fromMap({
       'file': await MultipartFile.fromFile(file.path,
-          filename: file.path.split('/').last),
+          filename: filename,
+          contentType: MediaType.parse(mimeStr)),
       if (fields != null) ...fields,
     });
     return _dio.post(path, data: formData,

@@ -14,6 +14,7 @@ import '../../providers/settings_provider.dart';
 import '../../services/backup_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../widgets/photo_grid.dart';
+import '../photo_viewer/local_photo_viewer_screen.dart';
 import '../settings/photo_picker_screen.dart';
 
 /// Photos tab - timeline view with date-grouped grid.
@@ -34,8 +35,11 @@ class _PhotosTabState extends ConsumerState<PhotosTab> {
   void initState() {
     super.initState();
     Future.microtask(() {
-      // Load local photos first (always available)
-      ref.read(localPhotoProvider.notifier).load();
+      // Load local photos filtered by backup folder selection
+      final settings = ref.read(settingsProvider);
+      ref.read(localPhotoProvider.notifier).load(
+        albumFilter: settings.hasSelection ? settings.selectedAlbumIds : null,
+      );
       // Start connectivity monitoring
       _startConnectivityMonitoring();
       // Only load server photos if connectivity looks possible
@@ -107,6 +111,15 @@ class _PhotosTabState extends ConsumerState<PhotosTab> {
 
   @override
   Widget build(BuildContext context) {
+    // Reload local photos when backup folder settings change
+    ref.listen(settingsProvider, (prev, next) {
+      if (prev?.selectedAlbumIds != next.selectedAlbumIds) {
+        ref.read(localPhotoProvider.notifier).load(
+          albumFilter: next.hasSelection ? next.selectedAlbumIds : null,
+        );
+      }
+    });
+
     final connectivity = ref.watch(connectivityProvider);
     final isOnline = connectivity.isServerReachable;
 
@@ -200,19 +213,34 @@ class _PhotosTabState extends ConsumerState<PhotosTab> {
   Widget _buildOfflineView() {
     final localState = ref.watch(localPhotoProvider);
     final syncCache = ref.read(syncCacheProvider);
+    final settings = ref.watch(settingsProvider);
 
     if (localState.photos.isEmpty && localState.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
     if (localState.photos.isEmpty) {
-      return const Center(
+      final message = settings.hasSelection
+          ? '선택한 앨범에 사진이 없습니다'
+          : '백업 폴더를 설정해주세요';
+      final icon = settings.hasSelection
+          ? Icons.photo_library_outlined
+          : Icons.folder_open;
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.photo_library_outlined, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
-            Text('기기에 사진이 없습니다',
-                style: TextStyle(color: Colors.grey, fontSize: 16)),
+            Icon(icon, size: 64, color: Colors.grey),
+            const SizedBox(height: 16),
+            Text(message,
+                style: const TextStyle(color: Colors.grey, fontSize: 16)),
+            if (!settings.hasSelection) ...[
+              const SizedBox(height: 12),
+              TextButton.icon(
+                onPressed: () => context.push('/settings'),
+                icon: const Icon(Icons.settings),
+                label: const Text('설정으로 이동'),
+              ),
+            ],
           ],
         ),
       );
@@ -220,6 +248,17 @@ class _PhotosTabState extends ConsumerState<PhotosTab> {
 
     return LocalPhotoGrid(
       photos: localState.photos,
+      onPhotoTap: (asset) {
+        final index = localState.photos.indexOf(asset);
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => LocalPhotoViewerScreen(
+              photos: localState.photos,
+              initialIndex: index >= 0 ? index : 0,
+            ),
+          ),
+        );
+      },
       onLoadMore: () {
         ref.read(localPhotoProvider.notifier).loadMore();
       },
@@ -268,8 +307,13 @@ class _PhotosTabState extends ConsumerState<PhotosTab> {
         ref.read(photoTimelineProvider.notifier).loadInitial();
       }
 
-      // Refresh local photos
-      ref.read(localPhotoProvider.notifier).load();
+      // Refresh local photos with album filter
+      final reloadSettings = ref.read(settingsProvider);
+      ref.read(localPhotoProvider.notifier).load(
+        albumFilter: reloadSettings.hasSelection
+            ? reloadSettings.selectedAlbumIds
+            : null,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

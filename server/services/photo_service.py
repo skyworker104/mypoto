@@ -1,5 +1,6 @@
 """Photo upload, storage, and retrieval business logic."""
 
+import mimetypes
 from pathlib import Path
 
 from sqlmodel import Session, select, col, func
@@ -70,6 +71,12 @@ def upload_photo(
     ).first()
     if existing:
         raise ValueError(f"duplicate:{existing.id}")
+
+    # 1b. Correct MIME type if client sent generic octet-stream
+    if content_type == "application/octet-stream":
+        guessed, _ = mimetypes.guess_type(filename)
+        if guessed and guessed in ALL_TYPES:
+            content_type = guessed
 
     # 2. EXIF extraction (images only)
     exif_data = {}

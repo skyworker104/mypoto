@@ -46,6 +46,9 @@ dependencies:
   # Crypto
   crypto: ^3.0.3
 
+  # MIME type detection
+  mime: ^2.0.0
+
   # Notifications
   flutter_local_notifications: ^18.0.0
 
