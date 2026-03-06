@@ -19,6 +19,8 @@ class BackupProgress {
   final int failedPhotos;
   final String? currentFile;
   final String? errorMessage;
+  final int currentSentBytes;
+  final int currentTotalBytes;
 
   const BackupProgress({
     this.state = BackupState.idle,
@@ -28,10 +30,20 @@ class BackupProgress {
     this.failedPhotos = 0,
     this.currentFile,
     this.errorMessage,
+    this.currentSentBytes = 0,
+    this.currentTotalBytes = 0,
   });
 
   double get percent =>
       totalPhotos > 0 ? (uploadedPhotos + skippedPhotos + failedPhotos) / totalPhotos : 0;
+
+  /// Format bytes to human-readable string (KB/MB).
+  static String formatBytes(int bytes) {
+    if (bytes >= 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / 1024).toStringAsFixed(0)} KB';
+  }
 }
 
 /// Photo/video backup service.
@@ -184,7 +196,20 @@ class BackupService {
           for (var retry = 0; retry < AppConfig.maxRetries; retry++) {
             try {
               final uploadResp = await _api.upload('/photos/upload',
-                  file: file, fields: {'hash': hash});
+                  file: file,
+                  fields: {'hash': hash},
+                  onProgress: (sent, total) {
+                    _emit(BackupProgress(
+                      state: BackupState.uploading,
+                      totalPhotos: allAssets.length,
+                      uploadedPhotos: uploaded,
+                      skippedPhotos: skipped,
+                      failedPhotos: failed,
+                      currentFile: filename,
+                      currentSentBytes: sent,
+                      currentTotalBytes: total,
+                    ));
+                  });
               uploaded++;
               final photoId = uploadResp.data['photo_id'] as String?;
               if (photoId != null) {

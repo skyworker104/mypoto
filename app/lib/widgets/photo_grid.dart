@@ -51,6 +51,7 @@ class _PhotoGridState extends State<PhotoGrid> {
   }
 
   void _onScroll() {
+    if (!widget.hasMore || widget.isLoadingMore) return;
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 500) {
       widget.onLoadMore();
@@ -121,6 +122,7 @@ class _PhotoGridState extends State<PhotoGrid> {
 
         return CustomScrollView(
           controller: _scrollController,
+          physics: const ClampingScrollPhysics(),
           slivers: [
             for (final date in dates) ...[
               // Date header
@@ -344,6 +346,7 @@ class _LocalPhotoGridState extends State<LocalPhotoGrid> {
   }
 
   void _onScroll() {
+    if (!widget.hasMore || widget.isLoadingMore) return;
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 500) {
       widget.onLoadMore();
@@ -414,6 +417,7 @@ class _LocalPhotoGridState extends State<LocalPhotoGrid> {
 
         return CustomScrollView(
           controller: _scrollController,
+          physics: const ClampingScrollPhysics(),
           slivers: [
             for (final date in dates) ...[
               SliverPadding(

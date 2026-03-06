@@ -478,6 +478,15 @@ class _BackupDialog extends StatelessWidget {
                 Text(p.currentFile!,
                     style: Theme.of(context).textTheme.bodySmall,
                     overflow: TextOverflow.ellipsis),
+                if (p.currentTotalBytes > 0) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '${BackupProgress.formatBytes(p.currentSentBytes)} / ${BackupProgress.formatBytes(p.currentTotalBytes)}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.grey[600],
+                        ),
+                  ),
+                ],
               ],
             ],
           );
