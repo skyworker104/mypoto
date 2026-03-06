@@ -1,10 +1,11 @@
 /**
  * Settings view - system status, storage info, server URL.
  */
-import { apiJson } from '../api.js';
+import { apiJson, apiPost } from '../api.js';
 import { logout } from '../store.js';
 import { navigate } from '../router.js';
 import { formatBytes, el } from '../utils.js';
+import { showToast } from '../components/toast.js';
 
 let _el;
 
@@ -59,6 +60,11 @@ async function _loadStatus() {
     content.appendChild(_section('사진', [
       _row('전체 사진 수', `${photoCount}장`),
       _row('사진 용량', formatBytes(status.total_size_bytes || 0)),
+    ]));
+
+    // Photo management
+    content.appendChild(_section('사진 관리', [
+      _actionButton('위치정보 재추출', 'location_on', '사진 EXIF에서 GPS 위치정보를 다시 추출하고 지명을 변환합니다.', _reprocessLocation),
     ]));
 
     // Logout
@@ -125,4 +131,37 @@ function _storageBar(pct) {
     el('div', { className: 'storage-bar-fill', style: { width: `${pct}%` } }),
   ]);
   return bar;
+}
+
+function _actionButton(label, icon, description, onClick) {
+  const btn = el('button', {
+    className: 'btn btn-outline settings-action-btn',
+    onClick,
+  }, [
+    el('span', { className: 'material-symbols-outlined', textContent: icon }),
+    el('div', { className: 'settings-action-text' }, [
+      el('span', { className: 'settings-action-label', textContent: label }),
+      el('span', { className: 'settings-action-desc', textContent: description }),
+    ]),
+  ]);
+  return btn;
+}
+
+async function _reprocessLocation(e) {
+  const btn = e.currentTarget;
+  const label = btn.querySelector('.settings-action-label');
+  const origText = label.textContent;
+
+  btn.disabled = true;
+  label.textContent = '처리 중...';
+
+  try {
+    const result = await apiPost('/system/reprocess-location');
+    showToast(result.message || '위치정보 재추출 완료', { type: 'success' });
+  } catch (err) {
+    showToast('위치정보 재추출 실패', { type: 'error' });
+  } finally {
+    btn.disabled = false;
+    label.textContent = origText;
+  }
 }

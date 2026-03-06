@@ -216,6 +216,45 @@
   transition: width var(--transition-normal);
 }
 
+.settings-action-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  padding: var(--sp-3);
+  text-align: left;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.settings-action-btn:hover {
+  background: var(--color-surface-variant);
+}
+.settings-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.settings-action-btn .material-symbols-outlined {
+  font-size: 24px;
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+.settings-action-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-action-label {
+  font-weight: 500;
+  font-size: 14px;
+}
+.settings-action-desc {
+  font-size: 12px;
+  color: var(--color-on-surface-variant);
+}
+
 /* Map view */
 .map-container {
   height: calc(100dvh - var(--nav-height) - 56px);

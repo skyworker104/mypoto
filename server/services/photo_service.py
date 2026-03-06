@@ -125,7 +125,18 @@ def upload_photo(
         except Exception:
             pass
 
-    # 5. Create DB record
+    # 5. Reverse geocode if GPS is available
+    location_name = None
+    lat = exif_data.get("latitude")
+    lon = exif_data.get("longitude")
+    if lat is not None and lon is not None:
+        try:
+            from server.services.geocoding import reverse_geocode
+            location_name = reverse_geocode(lat, lon)
+        except Exception:
+            pass
+
+    # 6. Create DB record
     photo = Photo(
         user_id=user_id,
         file_hash=file_hash,
@@ -136,8 +147,9 @@ def upload_photo(
         width=width,
         height=height,
         taken_at=taken_at,
-        latitude=exif_data.get("latitude"),
-        longitude=exif_data.get("longitude"),
+        latitude=lat,
+        longitude=lon,
+        location_name=location_name,
         camera_make=exif_data.get("camera_make"),
         camera_model=exif_data.get("camera_model"),
         exif_data=exif_data.get("exif_json"),

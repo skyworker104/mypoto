@@ -1,5 +1,6 @@
 """System status API endpoints."""
 
+import logging
 import socket
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -12,6 +13,8 @@ from server.models.photo import Photo
 from server.models.user import User
 from server.schemas.photo import SystemStatusResponse
 from server.utils.storage import get_storage_info
+
+logger = logging.getLogger(__name__)
 
 
 def _get_local_ip() -> str:
@@ -84,3 +87,59 @@ def system_status(
         storage_free_bytes=storage["free_bytes"],
         storage_usage_percent=storage["usage_percent"],
     )
+
+
+@router.post("/reprocess-location")
+def reprocess_location(
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Re-extract GPS from EXIF for all photos and run batch geocoding.
+
+    1. Re-reads EXIF from original files to extract missing GPS data.
+    2. Runs reverse geocoding for photos with GPS but no location_name.
+    """
+    from pathlib import Path
+
+    from server.services.geocoding import batch_geocode_photos
+    from server.utils.exif import extract_exif
+
+    # Step 1: Re-extract GPS from photos that have no lat/lon
+    photos_no_gps = list(session.exec(
+        select(Photo).where(
+            Photo.status == "active",
+            Photo.is_video == False,  # noqa: E711
+            Photo.latitude == None,  # noqa: E711
+        )
+    ).all())
+
+    gps_updated = 0
+    for photo in photos_no_gps:
+        file_path = Path(photo.file_path)
+        if not file_path.exists():
+            continue
+        try:
+            file_data = file_path.read_bytes()
+            exif = extract_exif(file_data)
+            lat = exif.get("latitude")
+            lon = exif.get("longitude")
+            if lat is not None and lon is not None:
+                photo.latitude = lat
+                photo.longitude = lon
+                session.add(photo)
+                gps_updated += 1
+        except Exception as e:
+            logger.warning("GPS re-extract failed for %s: %s", photo.id, e)
+
+    if gps_updated:
+        session.commit()
+        logger.info("GPS re-extracted for %d photos", gps_updated)
+
+    # Step 2: Batch geocode (photos with GPS but no location_name)
+    geocoded = batch_geocode_photos(session)
+
+    return {
+        "gps_extracted": gps_updated,
+        "geocoded": geocoded,
+        "message": f"GPS 추출: {gps_updated}장, 지명 변환: {geocoded}장",
+    }

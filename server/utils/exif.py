@@ -1,12 +1,15 @@
 """EXIF metadata extraction from images."""
 
 import json
+import logging
 from datetime import datetime
 from io import BytesIO
 from typing import Any, Optional
 
 from PIL import Image
 from PIL.ExifTags import TAGS, GPSTAGS
+
+logger = logging.getLogger(__name__)
 
 
 def extract_exif(image_data: bytes) -> dict[str, Any]:
@@ -87,27 +90,67 @@ def extract_exif(image_data: bytes) -> dict[str, Any]:
 
 
 def _extract_gps(exif_data) -> Optional[tuple[float, float]]:
-    """Extract GPS coordinates from EXIF data."""
+    """Extract GPS coordinates from EXIF data.
+
+    Tries multiple methods for Pillow version compatibility:
+    1. get_ifd(0x8825) — Pillow 10.x+ IFD access
+    2. Direct tag 0x8825 from exif_data — older Pillow / some JPEG files
+    3. _getexif() fallback — legacy Pillow API
+    """
+    gps = _try_gps_ifd(exif_data)
+    if gps is None:
+        gps = _try_gps_tag_direct(exif_data)
+    if gps is None:
+        return None
+
+    lat = _gps_to_decimal(
+        gps.get("GPSLatitude"), gps.get("GPSLatitudeRef", "N")
+    )
+    lon = _gps_to_decimal(
+        gps.get("GPSLongitude"), gps.get("GPSLongitudeRef", "E")
+    )
+    if lat is not None and lon is not None:
+        logger.debug("GPS extracted: %.6f, %.6f", lat, lon)
+        return (lat, lon)
+
+    logger.debug("GPS tags found but could not parse coordinates: %s", list(gps.keys()))
+    return None
+
+
+def _try_gps_ifd(exif_data) -> Optional[dict]:
+    """Method 1: get_ifd(0x8825) — Pillow 10.x+."""
     try:
-        gps_ifd = exif_data.get_ifd(0x8825)  # GPSInfo IFD
+        gps_ifd = exif_data.get_ifd(0x8825)
         if not gps_ifd:
             return None
-
         gps = {}
         for tag_id, value in gps_ifd.items():
             tag_name = GPSTAGS.get(tag_id, str(tag_id))
             gps[tag_name] = value
+        if "GPSLatitude" in gps:
+            return gps
+    except Exception as e:
+        logger.debug("get_ifd(0x8825) failed: %s", e)
+    return None
 
-        lat = _gps_to_decimal(
-            gps.get("GPSLatitude"), gps.get("GPSLatitudeRef", "N")
-        )
-        lon = _gps_to_decimal(
-            gps.get("GPSLongitude"), gps.get("GPSLongitudeRef", "E")
-        )
-        if lat is not None and lon is not None:
-            return (lat, lon)
-    except Exception:
-        pass
+
+def _try_gps_tag_direct(exif_data) -> Optional[dict]:
+    """Method 2: Direct access to GPSInfo tag (0x8825) from exif dict."""
+    try:
+        # Some Pillow versions store GPSInfo as a dict directly in tag 0x8825
+        gps_raw = exif_data.get(0x8825)
+        if isinstance(gps_raw, dict):
+            gps = {}
+            for tag_id, value in gps_raw.items():
+                tag_name = GPSTAGS.get(tag_id, str(tag_id))
+                gps[tag_name] = value
+            if "GPSLatitude" in gps:
+                return gps
+        elif isinstance(gps_raw, int):
+            # gps_raw is an IFD pointer, try get_ifd with it
+            pass
+    except Exception as e:
+        logger.debug("Direct GPS tag access failed: %s", e)
     return None
 
 
