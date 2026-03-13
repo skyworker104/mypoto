@@ -156,7 +156,7 @@ async function _reprocessLocation(e) {
   label.textContent = '처리 중...';
 
   try {
-    const result = await apiPost('/system/reprocess-location');
+    const result = await apiPost('/system/reprocess-location', {});
     showToast(result.message || '위치정보 재추출 완료', { type: 'success' });
   } catch (err) {
     showToast('위치정보 재추출 실패', { type: 'error' });

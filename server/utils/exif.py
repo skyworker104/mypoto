@@ -70,8 +70,8 @@ def extract_exif(image_data: bytes) -> dict[str, Any]:
     if date_str and isinstance(date_str, str):
         result["taken_at"] = _parse_exif_date(date_str)
 
-    # GPS
-    gps_info = _extract_gps(exif_data)
+    # GPS — pass img so legacy _getexif() fallback can be tried
+    gps_info = _extract_gps(exif_data, img)
     if gps_info:
         result["latitude"] = gps_info[0]
         result["longitude"] = gps_info[1]
@@ -89,18 +89,21 @@ def extract_exif(image_data: bytes) -> dict[str, Any]:
     return result
 
 
-def _extract_gps(exif_data) -> Optional[tuple[float, float]]:
+def _extract_gps(exif_data, img=None) -> Optional[tuple[float, float]]:
     """Extract GPS coordinates from EXIF data.
 
     Tries multiple methods for Pillow version compatibility:
     1. get_ifd(0x8825) — Pillow 10.x+ IFD access
     2. Direct tag 0x8825 from exif_data — older Pillow / some JPEG files
-    3. _getexif() fallback — legacy Pillow API
+    3. img._getexif() — legacy Pillow API with fully parsed GPSInfo dict
     """
     gps = _try_gps_ifd(exif_data)
     if gps is None:
         gps = _try_gps_tag_direct(exif_data)
+    if gps is None and img is not None:
+        gps = _try_gps_legacy(img)
     if gps is None:
+        logger.debug("No GPS data found in any method")
         return None
 
     lat = _gps_to_decimal(
@@ -110,7 +113,7 @@ def _extract_gps(exif_data) -> Optional[tuple[float, float]]:
         gps.get("GPSLongitude"), gps.get("GPSLongitudeRef", "E")
     )
     if lat is not None and lon is not None:
-        logger.debug("GPS extracted: %.6f, %.6f", lat, lon)
+        logger.info("GPS extracted: %.6f, %.6f", lat, lon)
         return (lat, lon)
 
     logger.debug("GPS tags found but could not parse coordinates: %s", list(gps.keys()))
@@ -122,13 +125,16 @@ def _try_gps_ifd(exif_data) -> Optional[dict]:
     try:
         gps_ifd = exif_data.get_ifd(0x8825)
         if not gps_ifd:
+            logger.debug("get_ifd(0x8825) returned empty")
             return None
         gps = {}
         for tag_id, value in gps_ifd.items():
             tag_name = GPSTAGS.get(tag_id, str(tag_id))
             gps[tag_name] = value
         if "GPSLatitude" in gps:
+            logger.debug("GPS found via get_ifd: %s", list(gps.keys()))
             return gps
+        logger.debug("get_ifd returned data but no GPSLatitude: %s", list(gps.keys()))
     except Exception as e:
         logger.debug("get_ifd(0x8825) failed: %s", e)
     return None
@@ -137,20 +143,48 @@ def _try_gps_ifd(exif_data) -> Optional[dict]:
 def _try_gps_tag_direct(exif_data) -> Optional[dict]:
     """Method 2: Direct access to GPSInfo tag (0x8825) from exif dict."""
     try:
-        # Some Pillow versions store GPSInfo as a dict directly in tag 0x8825
         gps_raw = exif_data.get(0x8825)
+        if gps_raw is None:
+            logger.debug("Tag 0x8825 not found in exif_data")
+            return None
         if isinstance(gps_raw, dict):
             gps = {}
             for tag_id, value in gps_raw.items():
                 tag_name = GPSTAGS.get(tag_id, str(tag_id))
                 gps[tag_name] = value
             if "GPSLatitude" in gps:
+                logger.debug("GPS found via direct tag (dict): %s", list(gps.keys()))
                 return gps
-        elif isinstance(gps_raw, int):
-            # gps_raw is an IFD pointer, try get_ifd with it
-            pass
+        logger.debug("Tag 0x8825 exists but type=%s, value=%s", type(gps_raw).__name__, gps_raw)
     except Exception as e:
         logger.debug("Direct GPS tag access failed: %s", e)
+    return None
+
+
+def _try_gps_legacy(img) -> Optional[dict]:
+    """Method 3: img._getexif() — legacy Pillow API.
+
+    _getexif() returns a dict with integer tag keys where GPSInfo (0x8825)
+    is already parsed as a dict with integer sub-tag keys.
+    """
+    try:
+        if not hasattr(img, "_getexif"):
+            return None
+        raw_exif = img._getexif()
+        if not raw_exif:
+            return None
+        gps_raw = raw_exif.get(0x8825) or raw_exif.get(34853)
+        if not isinstance(gps_raw, dict):
+            return None
+        gps = {}
+        for tag_id, value in gps_raw.items():
+            tag_name = GPSTAGS.get(tag_id, str(tag_id))
+            gps[tag_name] = value
+        if "GPSLatitude" in gps:
+            logger.debug("GPS found via _getexif() legacy: %s", list(gps.keys()))
+            return gps
+    except Exception as e:
+        logger.debug("_getexif() GPS fallback failed: %s", e)
     return None
 
 

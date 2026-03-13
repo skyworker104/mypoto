@@ -93,7 +93,7 @@ def system_status(
 def reprocess_location(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
-):
+) -> dict:
     """Re-extract GPS from EXIF for all photos and run batch geocoding.
 
     1. Re-reads EXIF from original files to extract missing GPS data.
@@ -104,19 +104,24 @@ def reprocess_location(
     from server.services.geocoding import batch_geocode_photos
     from server.utils.exif import extract_exif
 
-    # Step 1: Re-extract GPS from photos that have no lat/lon
-    photos_no_gps = list(session.exec(
+    # Step 1: Re-extract GPS from ALL image photos (re-check even those without GPS)
+    photos = list(session.exec(
         select(Photo).where(
             Photo.status == "active",
-            Photo.is_video == False,  # noqa: E711
-            Photo.latitude == None,  # noqa: E711
+            Photo.is_video == False,  # noqa: E712
         )
     ).all())
 
+    logger.info("Reprocess-location: checking %d photos for GPS", len(photos))
+
     gps_updated = 0
-    for photo in photos_no_gps:
+    for photo in photos:
+        # Skip if already has GPS
+        if photo.latitude is not None and photo.longitude is not None:
+            continue
         file_path = Path(photo.file_path)
         if not file_path.exists():
+            logger.debug("File not found: %s", photo.file_path)
             continue
         try:
             file_data = file_path.read_bytes()
@@ -128,6 +133,7 @@ def reprocess_location(
                 photo.longitude = lon
                 session.add(photo)
                 gps_updated += 1
+                logger.info("GPS found for photo %s: %.6f, %.6f", photo.id, lat, lon)
         except Exception as e:
             logger.warning("GPS re-extract failed for %s: %s", photo.id, e)
 
@@ -138,8 +144,10 @@ def reprocess_location(
     # Step 2: Batch geocode (photos with GPS but no location_name)
     geocoded = batch_geocode_photos(session)
 
+    msg = f"GPS 추출: {gps_updated}장, 지명 변환: {geocoded}장"
+    logger.info("Reprocess-location complete: %s", msg)
     return {
         "gps_extracted": gps_updated,
         "geocoded": geocoded,
-        "message": f"GPS 추출: {gps_updated}장, 지명 변환: {geocoded}장",
+        "message": msg,
     }
