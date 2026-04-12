@@ -66,7 +66,7 @@ async function _loadClusters() {
     _clearMarkers();
 
     for (const c of clusters) {
-      if (!c.lat || !c.lon) continue;
+      if (c.lat == null || c.lon == null) continue;
       const marker = L.circleMarker([c.lat, c.lon], {
         radius: Math.min(6 + Math.sqrt(c.count) * 3, 30),
         color: 'var(--color-primary)',
@@ -113,6 +113,11 @@ async function _showClusterPhotos(cluster) {
   } catch (e) {
     console.error('Cluster photos error:', e);
   }
+}
+
+export function onDeactivate() {
+  const sidebar = _el?.querySelector('#map-sidebar');
+  if (sidebar) sidebar.style.display = 'none';
 }
 
 function _clearMarkers() {

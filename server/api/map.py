@@ -30,7 +30,7 @@ def map_photos(
     if all(v is not None for v in [lat_min, lat_max, lon_min, lon_max]):
         bounds = (lat_min, lat_max, lon_min, lon_max)
 
-    photos = get_photo_locations(session, bounds=bounds, limit=limit)
+    photos = get_photo_locations(session, family_id=user.family_id, bounds=bounds, limit=limit)
     return {"photos": photos, "count": len(photos)}
 
 
@@ -49,7 +49,7 @@ def map_clusters(
     if all(v is not None for v in [lat_min, lat_max, lon_min, lon_max]):
         bounds = (lat_min, lat_max, lon_min, lon_max)
 
-    clusters = get_location_clusters(session, precision=precision, bounds=bounds)
+    clusters = get_location_clusters(session, precision=precision, family_id=user.family_id, bounds=bounds)
     return {"clusters": clusters, "count": len(clusters)}
 
 
@@ -63,5 +63,5 @@ def nearby_photos(
     session: Session = Depends(get_session),
 ):
     """Get photos near a GPS coordinate."""
-    photos = get_photos_near(session, lat, lon, radius_km=radius, limit=limit)
+    photos = get_photos_near(session, lat, lon, radius_km=radius, limit=limit, family_id=user.family_id)
     return {"photos": photos, "count": len(photos)}

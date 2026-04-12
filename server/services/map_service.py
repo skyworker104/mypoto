@@ -4,10 +4,19 @@ import math
 from sqlmodel import Session, select, col, func
 
 from server.models.photo import Photo
+from server.models.user import User
+
+
+def _family_user_ids(session: Session, family_id: str) -> list[str]:
+    """Get all user IDs belonging to a family."""
+    return list(session.exec(
+        select(User.id).where(User.family_id == family_id)
+    ).all())
 
 
 def get_photo_locations(
     session: Session,
+    family_id: str | None = None,
     bounds: tuple[float, float, float, float] | None = None,
     limit: int = 500,
 ) -> list[dict]:
@@ -20,6 +29,10 @@ def get_photo_locations(
         Photo.latitude != None,  # noqa: E711
         Photo.longitude != None,  # noqa: E711
     )
+
+    if family_id:
+        user_ids = _family_user_ids(session, family_id)
+        query = query.where(Photo.user_id.in_(user_ids))
 
     if bounds:
         lat_min, lat_max, lon_min, lon_max = bounds
@@ -49,6 +62,7 @@ def get_photo_locations(
 def get_location_clusters(
     session: Session,
     precision: int = 2,
+    family_id: str | None = None,
     bounds: tuple[float, float, float, float] | None = None,
 ) -> list[dict]:
     """Cluster photos by rounded GPS coordinates.
@@ -60,6 +74,10 @@ def get_location_clusters(
         Photo.latitude != None,  # noqa: E711
         Photo.longitude != None,  # noqa: E711
     )
+
+    if family_id:
+        user_ids = _family_user_ids(session, family_id)
+        query = query.where(Photo.user_id.in_(user_ids))
 
     if bounds:
         lat_min, lat_max, lon_min, lon_max = bounds
@@ -112,20 +130,27 @@ def get_photos_near(
     lon: float,
     radius_km: float = 5.0,
     limit: int = 50,
+    family_id: str | None = None,
 ) -> list[dict]:
     """Get photos near a GPS coordinate within radius_km."""
     # Approximate bounding box
     lat_delta = radius_km / 111.0
     lon_delta = radius_km / (111.0 * max(math.cos(math.radians(lat)), 0.01))
 
+    query = select(Photo).where(
+        Photo.status == "active",
+        Photo.latitude >= lat - lat_delta,
+        Photo.latitude <= lat + lat_delta,
+        Photo.longitude >= lon - lon_delta,
+        Photo.longitude <= lon + lon_delta,
+    )
+
+    if family_id:
+        user_ids = _family_user_ids(session, family_id)
+        query = query.where(Photo.user_id.in_(user_ids))
+
     photos = list(session.exec(
-        select(Photo).where(
-            Photo.status == "active",
-            Photo.latitude >= lat - lat_delta,
-            Photo.latitude <= lat + lat_delta,
-            Photo.longitude >= lon - lon_delta,
-            Photo.longitude <= lon + lon_delta,
-        ).order_by(col(Photo.taken_at).desc()).limit(limit)
+        query.order_by(col(Photo.taken_at).desc()).limit(limit)
     ).all())
 
     return [
