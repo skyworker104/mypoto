@@ -2,7 +2,7 @@
  * Settings view - system status, storage info, server URL.
  */
 import { apiJson, apiPost } from '../api.js';
-import { logout } from '../store.js';
+import { getState, logout } from '../store.js';
 import { navigate } from '../router.js';
 import { formatBytes, el } from '../utils.js';
 import { showToast } from '../components/toast.js';
@@ -147,7 +147,7 @@ function _actionButton(label, icon, description, onClick) {
   return btn;
 }
 
-async function _reprocessLocation(e) {
+function _reprocessLocation(e) {
   const btn = e.currentTarget;
   const label = btn.querySelector('.settings-action-label');
   const origText = label.textContent;
@@ -155,13 +155,128 @@ async function _reprocessLocation(e) {
   btn.disabled = true;
   label.textContent = '처리 중...';
 
-  try {
-    const result = await apiPost('/system/reprocess-location', {});
-    showToast(result.message || '위치정보 재추출 완료', { type: 'success' });
-  } catch (err) {
-    showToast('위치정보 재추출 실패', { type: 'error' });
-  } finally {
+  // Create or reuse log panel
+  let logPanel = _el.querySelector('#reprocess-log');
+  if (!logPanel) {
+    logPanel = el('div', { id: 'reprocess-log', className: 'reprocess-log' });
+    // Insert after the photo management section
+    btn.closest('.settings-section').after(logPanel);
+  }
+  logPanel.innerHTML = '';
+  logPanel.style.display = '';
+
+  // Progress bar
+  const progressWrap = el('div', { className: 'reprocess-progress' }, [
+    el('div', { className: 'reprocess-progress-bar', id: 'reprocess-bar' }),
+  ]);
+  logPanel.appendChild(progressWrap);
+
+  // Status summary line
+  const statusLine = el('div', { className: 'reprocess-status', id: 'reprocess-status', textContent: '준비 중...' });
+  logPanel.appendChild(statusLine);
+
+  // Scrollable log area
+  const logArea = el('div', { className: 'reprocess-log-area', id: 'reprocess-log-area' });
+  logPanel.appendChild(logArea);
+
+  const token = getState('auth.accessToken');
+  const url = `/api/v1/system/reprocess-location-stream?token=${encodeURIComponent(token)}`;
+  const es = new EventSource(url);
+
+  es.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      _handleSSEEvent(data, logArea, statusLine);
+    } catch { /* ignore parse errors */ }
+  };
+
+  es.onerror = () => {
+    es.close();
     btn.disabled = false;
     label.textContent = origText;
+    // If no done message was received, show error
+    if (!logPanel.dataset.done) {
+      showToast('위치정보 재추출 연결 종료', { type: 'error' });
+    }
+  };
+}
+
+function _handleSSEEvent(data, logArea, statusLine) {
+  const bar = _el.querySelector('#reprocess-bar');
+  const logPanel = _el.querySelector('#reprocess-log');
+
+  if (data.type === 'start') {
+    statusLine.textContent = data.message;
+    return;
+  }
+
+  if (data.type === 'progress' || data.type === 'geocode') {
+    // Update progress bar
+    if (bar && data.total > 0) {
+      const pct = Math.round((data.current / data.total) * 100);
+      bar.style.width = `${pct}%`;
+    }
+    statusLine.textContent = `${data.current} / ${data.total}`;
+  }
+
+  if (data.type === 'phase') {
+    // Phase separator
+    const line = el('div', { className: 'reprocess-line reprocess-phase', textContent: data.message });
+    logArea.appendChild(line);
+    statusLine.textContent = data.message;
+    // Reset progress bar for geocode phase
+    if (bar) bar.style.width = '0%';
+  }
+
+  if (data.type === 'progress') {
+    const statusClass = _statusClass(data.status);
+    const line = el('div', { className: `reprocess-line ${statusClass}` }, [
+      el('span', { className: 'reprocess-icon', textContent: _statusIcon(data.status) }),
+      el('span', { textContent: data.message }),
+    ]);
+    logArea.appendChild(line);
+    logArea.scrollTop = logArea.scrollHeight;
+  }
+
+  if (data.type === 'geocode') {
+    const line = el('div', { className: 'reprocess-line reprocess-geocode' }, [
+      el('span', { className: 'reprocess-icon', textContent: '📍' }),
+      el('span', { textContent: data.message }),
+    ]);
+    logArea.appendChild(line);
+    logArea.scrollTop = logArea.scrollHeight;
+  }
+
+  if (data.type === 'done') {
+    if (logPanel) logPanel.dataset.done = '1';
+    statusLine.textContent = data.message;
+    if (bar) bar.style.width = '100%';
+    showToast(data.message, { type: 'success' });
+    // Re-enable button
+    const btn = _el.querySelector('.settings-action-btn');
+    if (btn) {
+      btn.disabled = false;
+      btn.querySelector('.settings-action-label').textContent = '위치정보 재추출';
+    }
+  }
+}
+
+function _statusIcon(status) {
+  switch (status) {
+    case 'skip': return '⏭️';
+    case 'extracted': return '✅';
+    case 'no_gps': return '📷';
+    case 'error': return '❌';
+    default: return '•';
+  }
+}
+
+function _statusClass(status) {
+  switch (status) {
+    case 'skip': return 'reprocess-skip';
+    case 'extracted': return 'reprocess-success';
+    case 'no_gps': return 'reprocess-nogps';
+    case 'error': return 'reprocess-error';
+    default: return '';
   }
 }

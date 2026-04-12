@@ -255,6 +255,93 @@
   color: var(--color-on-surface-variant);
 }
 
+/* Reprocess location progress log */
+.reprocess-log {
+  margin: var(--sp-3) 0;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.reprocess-progress {
+  height: 4px;
+  background: var(--color-surface-variant);
+  overflow: hidden;
+}
+
+.reprocess-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--color-primary);
+  transition: width 0.3s ease;
+}
+
+.reprocess-status {
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-on-surface);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.reprocess-log-area {
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: var(--sp-2) 0;
+  font-size: 12px;
+  font-family: 'SF Mono', 'Menlo', monospace;
+  line-height: 1.6;
+}
+
+.reprocess-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-1);
+  padding: 2px var(--sp-3);
+  color: var(--color-on-surface-variant);
+}
+
+.reprocess-line:hover {
+  background: var(--color-surface-variant);
+}
+
+.reprocess-icon {
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+}
+
+.reprocess-success {
+  color: var(--color-primary);
+}
+
+.reprocess-skip {
+  color: var(--color-on-surface-variant);
+  opacity: 0.6;
+}
+
+.reprocess-nogps {
+  color: var(--color-on-surface-variant);
+}
+
+.reprocess-error {
+  color: var(--color-error);
+}
+
+.reprocess-phase {
+  font-weight: 600;
+  color: var(--color-on-surface);
+  padding: var(--sp-2) var(--sp-3);
+  margin-top: var(--sp-1);
+  border-top: 1px solid var(--color-divider);
+  font-family: inherit;
+}
+
+.reprocess-geocode {
+  color: var(--color-secondary, #5f6368);
+}
+
 /* Map view */
 .map-container {
   height: calc(100dvh - var(--nav-height) - 56px);
