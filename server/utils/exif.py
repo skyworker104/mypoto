@@ -71,10 +71,13 @@ def extract_exif(image_data: bytes) -> dict[str, Any]:
         result["taken_at"] = _parse_exif_date(date_str)
 
     # GPS — pass img so legacy _getexif() fallback can be tried
-    gps_info = _extract_gps(exif_data, img)
-    if gps_info:
-        result["latitude"] = gps_info[0]
-        result["longitude"] = gps_info[1]
+    try:
+        gps_info = _extract_gps(exif_data, img)
+        if gps_info:
+            result["latitude"] = gps_info[0]
+            result["longitude"] = gps_info[1]
+    except Exception as e:
+        logger.warning("GPS extraction failed: %s", e)
 
     # Store full EXIF as JSON (only serializable fields)
     safe = {}
@@ -193,14 +196,32 @@ def _gps_to_decimal(coords, ref: str) -> Optional[float]:
     if not coords or len(coords) != 3:
         return None
     try:
-        degrees = float(coords[0])
-        minutes = float(coords[1])
-        seconds = float(coords[2])
+        degrees = _rational_to_float(coords[0])
+        minutes = _rational_to_float(coords[1])
+        seconds = _rational_to_float(coords[2])
+        if degrees is None or minutes is None or seconds is None:
+            return None
         decimal = degrees + minutes / 60.0 + seconds / 3600.0
         if ref in ("S", "W"):
             decimal = -decimal
         return round(decimal, 6)
-    except (ValueError, TypeError):
+    except Exception:
+        return None
+
+
+def _rational_to_float(val) -> Optional[float]:
+    """Safely convert IFDRational or numeric value to float.
+
+    Handles IFDRational(0, 0) which raises ZeroDivisionError on float().
+    """
+    if val is None:
+        return None
+    try:
+        # IFDRational has numerator/denominator attributes
+        if hasattr(val, "denominator") and val.denominator == 0:
+            return 0.0 if hasattr(val, "numerator") and val.numerator == 0 else None
+        return float(val)
+    except (ValueError, TypeError, ZeroDivisionError):
         return None
 
 
